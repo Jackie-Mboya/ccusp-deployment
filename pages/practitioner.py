@@ -281,6 +281,8 @@ def _render_assessment(models, user):
     # Save to DB so dashboard + history update immediately
     save_prediction(user, ui_dict, result)
     st.cache_data.clear()
+    st.success("✅ Assessment saved successfully!", icon="✅")
+
 
     # ── Result card ───────────────────────────────────────────────────────────
     st.markdown("---")
