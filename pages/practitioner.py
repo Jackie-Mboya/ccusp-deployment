@@ -176,6 +176,39 @@ def _render_dashboard(user, models):
 # SELF-ASSESSMENT
 # ─────────────────────────────────────────────────────────────────────────────
 def _render_assessment(models, user):
+    def _render_assessment(models, user):
+    # SUPER SIMPLE DATABASE CONNECTION TEST
+    st.markdown("## 🔍 DATABASE DIAGNOSTIC")
+    
+    try:
+        from utils.database import get_predictions_df, count_predictions, count_registered
+        import streamlit as st
+        
+        # Test 1: Can we connect?
+        st.write("Test 1: Checking database connection...")
+        reg_count = count_registered()
+        st.success(f"✅ Connection OK! Registered users: {reg_count}")
+        
+        # Test 2: Check predictions count
+        pred_count = count_predictions()
+        st.success(f"✅ Predictions in DB: {pred_count}")
+        
+        # Test 3: Try to get predictions
+        df = get_predictions_df()
+        st.write(f"DataFrame shape: {df.shape}")
+        if not df.empty:
+            st.dataframe(df.head())
+        else:
+            st.warning("⚠️ Predictions DataFrame is empty")
+            
+    except Exception as e:
+        st.error(f"❌ Database error: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+    
+    st.markdown("---")
+    st.markdown("### 🩺 Self-Assessment Form")
+    
     st.markdown("""
     <div class="page-header">
         <h2>🩺 CCUSP Self-Assessment</h2>
