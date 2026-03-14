@@ -15,6 +15,24 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# ===== ADD THIS CODE RIGHT HERE =====
+# Initialize session state for login
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.user = None
+    st.session_state.role = None
+
+# Hide sidebar for non-logged-in users
+if not st.session_state.get("logged_in"):
+    st.markdown("""
+        <style>
+            [data-testid="stSidebar"] {display: none;}
+            [data-testid="collapsedControl"] {display: none;}
+        </style>
+    """, unsafe_allow_html=True)
+# ====================================
+
 st.markdown("""
     <style>
         [data-testid="stSidebarNav"] {display: none;}
