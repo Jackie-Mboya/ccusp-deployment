@@ -295,8 +295,15 @@ def _render_assessment(models, user):
     print(f"📊 After save - User has {len(my_df)} predictions in DataFrame")
 
     # Show success message with count
+    # Show success message with count
     count = len(my_df)
     st.success(f"✅ Assessment saved successfully! You now have {count} total assessment(s).", icon="✅")
+
+    # ADD THIS TEMPORARY DEBUG
+    if count == 0:
+        st.error("⚠️ WARNING: No data found in database after save! Check logs.")
+    else:
+        st.info(f"✅ Database verification: Found {count} records for {user.get('username')}")
 
     # ── Result card ───────────────────────────────────────────────────────────
     st.markdown("---")
