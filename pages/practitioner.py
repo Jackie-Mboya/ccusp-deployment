@@ -14,11 +14,6 @@ from utils.model_loader import predict_from_ui, EXPECTED_COLUMNS
 from utils.shap_explainer import get_shap_explanation, plot_shap_waterfall
 from utils.database import save_prediction, get_predictions_df, SPECIALTIES
 
-@st.cache_data(ttl=3)
-def _cached_predictions():
-    """Re-fetched every 3 seconds so pages stay in sync after a new assessment."""
-    return get_predictions_df()
-
 # ── Option lists ──────────────────────────────────────────────────────────────
 _YRS     = ["<5 years", "5-10 years", "11-20 years", ">20 years"]
 _ICU_VOL = ["<500", "500-1000", "1000-2000", "2000-3000", ">3000"]
@@ -88,7 +83,7 @@ def _render_dashboard(user, models):
     """, unsafe_allow_html=True)
 
     # Pull this user's predictions from DB
-    all_df = _cached_predictions()
+    all_df = get_predictions_df()
     my_df  = all_df[all_df["username"] == user["username"]] if not all_df.empty else pd.DataFrame()
 
     # ── KPI metrics ───────────────────────────────────────────────────────────
@@ -176,39 +171,6 @@ def _render_dashboard(user, models):
 # SELF-ASSESSMENT
 # ─────────────────────────────────────────────────────────────────────────────
 def _render_assessment(models, user):
-    def _render_assessment(models, user):
-    # SUPER SIMPLE DATABASE CONNECTION TEST
-    st.markdown("## 🔍 DATABASE DIAGNOSTIC")
-    
-    try:
-        from utils.database import get_predictions_df, count_predictions, count_registered
-        import streamlit as st
-        
-        # Test 1: Can we connect?
-        st.write("Test 1: Checking database connection...")
-        reg_count = count_registered()
-        st.success(f"✅ Connection OK! Registered users: {reg_count}")
-        
-        # Test 2: Check predictions count
-        pred_count = count_predictions()
-        st.success(f"✅ Predictions in DB: {pred_count}")
-        
-        # Test 3: Try to get predictions
-        df = get_predictions_df()
-        st.write(f"DataFrame shape: {df.shape}")
-        if not df.empty:
-            st.dataframe(df.head())
-        else:
-            st.warning("⚠️ Predictions DataFrame is empty")
-            
-    except Exception as e:
-        st.error(f"❌ Database error: {e}")
-        import traceback
-        st.code(traceback.format_exc())
-    
-    st.markdown("---")
-    st.markdown("### 🩺 Self-Assessment Form")
-    
     st.markdown("""
     <div class="page-header">
         <h2>🩺 CCUSP Self-Assessment</h2>
@@ -311,29 +273,8 @@ def _render_assessment(models, user):
         "confidence":  conf,
     }
 
-    # DEBUG: Show what we're trying to save
-    st.warning(f"🔍 Attempting to save assessment for {user.get('username')}...")
-    
-    try:
-        # Save to DB so dashboard + history update immediately
-        save_prediction(user, ui_dict, result)
-        st.success("✅ save_prediction() completed without errors!")
-    except Exception as e:
-        st.error(f"❌ Error in save_prediction: {e}")
-    
-    st.cache_data.clear()
-
-    # Verify the save
-    all_df = _cached_predictions()
-    my_df = all_df[all_df["username"] == user["username"]] if not all_df.empty else pd.DataFrame()
-    count = len(my_df)
-    
-    if count > 0:
-        st.success(f"✅ VERIFICATION SUCCESS: Found {count} assessments in database!")
-        with st.expander("📋 View your saved assessment data"):
-            st.dataframe(my_df[['predicted_at', 'probability', 'ccusp_label']].head())
-    else:
-        st.error(f"❌ VERIFICATION FAILED: No assessments found in database for {user.get('username')}!")
+    # Save to DB so dashboard + history update immediately
+    save_prediction(user, ui_dict, result)
 
     # ── Result card ───────────────────────────────────────────────────────────
     st.markdown("---")
@@ -361,11 +302,6 @@ def _render_assessment(models, user):
     m3.metric("Threshold",   f"{thresh:.4f}")
     m4.metric("Confidence",  conf)
 
-    # Optional: Show a preview of the data
-    if count > 0:
-        with st.expander("📋 View your saved assessment data"):
-            st.dataframe(my_df[['predicted_at', 'probability', 'ccusp_label']].head())
-
     # REMOVED: Navigation buttons after assessment
 
 
@@ -383,7 +319,7 @@ def _render_history(user):
     # REMOVED: Navigation options at the top
     # REMOVED: Current page indicator
 
-    all_df = _cached_predictions()
+    all_df = get_predictions_df()
     my_df  = (all_df[all_df["username"] == user["username"]].copy()
               if not all_df.empty else pd.DataFrame())
 
@@ -500,7 +436,7 @@ def _render_benchmarks(user):
     # REMOVED: Navigation options at the top
     # REMOVED: Current page indicator
 
-    all_df = _cached_predictions()
+    all_df = get_predictions_df()
     if all_df.empty:
         st.info("No benchmark data available yet — assessments from all practitioners "
                 "will appear here once submitted.", icon="ℹ️")

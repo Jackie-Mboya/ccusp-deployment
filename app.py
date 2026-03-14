@@ -4,7 +4,7 @@ Run:  streamlit run app.py
 """
 
 import streamlit as st
-from utils.database import init_db, authenticate, register_user, SPECIALTIES, HOSPITALS, PROVIDER_TYPES, INCOME_LEVELS, verify_predictions_table
+from utils.database import init_db, authenticate, register_user, SPECIALTIES, HOSPITALS, PROVIDER_TYPES, INCOME_LEVELS
 from utils.model_loader import load_models
 from pages import practitioner, admin
 
@@ -16,55 +16,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ===== ADD THIS CODE RIGHT HERE =====
-# Initialize session state for login
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.user = None
-    st.session_state.role = None
-
-# Hide sidebar for non-logged-in users
-if not st.session_state.get("logged_in"):
-    st.markdown("""
-        <style>
-            [data-testid="stSidebar"] {display: none;}
-            [data-testid="collapsedControl"] {display: none;}
-        </style>
-    """, unsafe_allow_html=True)
-# ====================================
-
-st.markdown("""
-    <style>
-        [data-testid="stSidebarNav"] {display: none;}
-    </style>
-""", unsafe_allow_html=True)
-
 # ── Initialise DB on every startup ────────────────────────────────────────────
 init_db()
-verify_predictions_table()
-# After init_db(), add:
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🔍 Database Status")
-
-try:
-    from utils.database import count_registered, count_predictions, _get_raw_conn
-    
-    # Test connection
-    conn, db_type = _get_raw_conn()
-    conn.close()
-    
-    st.sidebar.success(f"✅ Connected to {db_type}")
-    st.sidebar.info(f"👥 Users: {count_registered()}")
-    st.sidebar.info(f"📊 Predictions: {count_predictions()}")
-    
-    # Show which database is being used
-    if db_type == "postgres":
-        st.sidebar.markdown("🟢 **Using Supabase PostgreSQL**")
-    else:
-        st.sidebar.markdown("🟡 **Using SQLite (local)**")
-        
-except Exception as e:
-    st.sidebar.error(f"❌ DB Error: {str(e)[:100]}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  GLOBAL CSS

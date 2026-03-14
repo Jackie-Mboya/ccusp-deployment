@@ -357,20 +357,23 @@ def _tab_practitioners_with_drilldown():
                 all_hospitals = ["All"]
             hospital_filter = st.selectbox("Filter by hospital", all_hospitals, key="filter_hospital")
     
-            # Apply filters
-            filtered_practitioners = practitioners.copy()
-            
-            if search_name:
-                filtered_practitioners = [p for p in filtered_practitioners 
-                                        if search_name.lower() in str(p.get("Full Name", "")).lower()]
-            
-            if specialty_filter != "All":
-                filtered_practitioners = [p for p in filtered_practitioners 
-                                        if p.get("Specialty") == specialty_filter]
-            
-            if hospital_filter != "All":
-                filtered_practitioners = [p for p in filtered_practitioners 
-                                        if p.get("Hospital") == hospital_filter]
+    # Apply filters
+    filtered_practitioners = practitioners.copy()
+    
+    if search_name:
+        filtered_practitioners = [p for p in filtered_practitioners 
+                                 if search_name.lower() in str(p.get("name", "")).lower() or
+                                    search_name.lower() in str(p.get("Name", "")).lower()]
+    
+    if specialty_filter != "All":
+        filtered_practitioners = [p for p in filtered_practitioners 
+                                 if p.get("specialty") == specialty_filter or 
+                                    p.get("Specialty") == specialty_filter]
+    
+    if hospital_filter != "All":
+        filtered_practitioners = [p for p in filtered_practitioners 
+                                 if p.get("hospital") == hospital_filter or
+                                    p.get("Hospital") == hospital_filter]
     
     # Display practitioners in a table with clickable rows
     st.markdown("### Practitioner List")
