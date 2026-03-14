@@ -63,25 +63,22 @@ _CATEGORICAL = [
 def load_ensemble_metrics(model_path='models'):
     """Load only Ensemble LASSO metrics from JSON file."""
     metrics_path = os.path.join(model_path, 'ensemble_metrics.json')
-    
     if os.path.exists(metrics_path):
         with open(metrics_path, 'r') as f:
             return json.load(f)
-    else:
-        # Return defaults if file not found (fallback)
-        return {
-            'model_name': 'Ensemble LASSO',
-            'f1_score': 0.8385,
-            'accuracy': 0.7655,
-            'precision': 0.8191,
-            'recall': 0.8590,
-            'auc_roc': 0.7244,
-            'auprc': 0.8487,
-            'threshold': 0.4023,
-            'cv_folds': 3,
-            'inference_ms': 3.316,
-            'train_time_s': 20.168
-        }
+    return {
+        'model_name': 'Ensemble LASSO',
+        'f1_score': 0.8385,
+        'accuracy': 0.7655,
+        'precision': 0.8191,
+        'recall': 0.8590,
+        'auc_roc': 0.7244,
+        'auprc': 0.8487,
+        'threshold': 0.4023,
+        'cv_folds': 3,
+        'inference_ms': 3.316,
+        'train_time_s': 20.168
+    }
 
 
 def load_models(model_path='models'):
@@ -91,20 +88,15 @@ def load_models(model_path='models'):
         'lasso_models': 'tuned_ensemble_lasso_models.pkl',
         'threshold':    'tuned_optimal_threshold.pkl',
     }
-    
     missing = [f for f in files.values()
                if not os.path.exists(os.path.join(model_path, f))]
     if missing:
         raise FileNotFoundError(
             f"Missing model files in '{model_path}': {missing}. "
             "Copy pkl files from Google Drive/my_visuals/ into models/.")
-    
     try:
         models = {k: joblib.load(os.path.join(model_path, f)) for k, f in files.items()}
-        
-        # Load ONLY Ensemble LASSO metrics
         models['metrics'] = load_ensemble_metrics(model_path)
-        
         return models
     except Exception as e:
         raise RuntimeError(f"Failed to load model artifacts: {e}") from e
@@ -113,8 +105,6 @@ def load_models(model_path='models'):
 def map_ui_to_training_values(ui_dict):
     """Convert UI input values to the categorical values used during training."""
     mapped = {}
-    
-    # Binary fields
     mapped['High_Income_Country'] = 'Yes' if ui_dict['income'] == 'High Income' else 'No'
     mapped['Adult_vs_Pediatric_Practitioner'] = 'Yes' if ui_dict['pop'] == 'Adult' else 'No'
     mapped['More_than_10_years_of_practice'] = 'Yes' if ui_dict['yrs'] in ['11-20 years', '>20 years'] else 'No'
@@ -122,41 +112,27 @@ def map_ui_to_training_values(ui_dict):
     mapped['Additional_training'] = ui_dict['extra']
     mapped['Manage_critically_ill_patients'] = ui_dict['manages']
     mapped['Hospital_Setting'] = 'Yes' if ui_dict['hosp_type'] == 'Academic' else 'No'
-    
-    # Specialty mapping
     specialty_map = {
         'Anesthesiology': 'Anesthesia',
         'Cardiac Critical Care': 'Cardiac Critical Care',
         'Medical ICU': 'Medical ICU',
         'Neurology/Neuro Critical Care': 'Neurology/Neuro Critical Care',
-        'Surgical ICU': 'Surgical ICU'  # ← Add this if needed
+        'Surgical ICU': 'Surgical ICU',
     }
     mapped['Specialty'] = specialty_map.get(ui_dict['specialty'], ui_dict['specialty'])
-    
     mapped['Years_Practiced_in_Specialty'] = ui_dict['yrs']
     mapped['ICU_Patient_Count'] = ui_dict['icu_vol']
     mapped['Physician_vs_APN'] = 1 if ui_dict['provider_type'] == 'Physician' else 0
     mapped['Advanced_POCUS_Certification'] = 1 if ui_dict['cert'] == 'Yes' else 0
-    
     return mapped
 
 
 def preprocess_input(ui_dict):
     """Transform UI inputs into the format expected by the model."""
-    
-    # Step 1: Get base values
     mapped_values = map_ui_to_training_values(ui_dict)
     df = pd.DataFrame([mapped_values])
-    
-    # Step 2: One-hot encode categorical columns
     df_encoded = pd.get_dummies(df, columns=_CATEGORICAL, drop_first=False)
-    
-    # Step 3: Align to ALL expected columns, filling any unseen dummies with 0.
-    # This handles _Missing columns (e.g. Years_Practiced_in_Specialty_Missing)
-    # that exist in the trained model but are never triggered at inference time
-    # because the form always requires a selection.
     df_encoded = df_encoded.reindex(columns=EXPECTED_COLUMNS, fill_value=0)
-    
     return df_encoded.astype(float)
 
 
@@ -164,22 +140,19 @@ def predict_from_ui(models, ui_dict: dict, use_youden: bool = True):
     """
     Main prediction function. Takes clean UI dict and returns prob, pred, X_sc.
     """
-    # Preprocess input
-    X_input = preprocess_input(ui_dict)
-
-    # Scale features
+    X_input  = preprocess_input(ui_dict)
     X_scaled = models['scaler'].transform(X_input)
-    
-    # Get predictions from all LASSO models and average
+
+    # ── Keep column names so sklearn doesn't warn about feature name mismatch ─
+    X_scaled = pd.DataFrame(X_scaled, columns=EXPECTED_COLUMNS)
+
     prob_list = []
     for model in models['lasso_models']:
         prob = model.predict_proba(X_scaled)[:, 1]
         prob_list.append(prob)
-    
-    prob = float(np.mean(prob_list))
-    
-    # Apply threshold
+
+    prob      = float(np.mean(prob_list))
     threshold = models['threshold'] if use_youden else 0.5
-    pred = int(prob >= threshold)
-    
+    pred      = int(prob >= threshold)
+
     return prob, pred, X_scaled
