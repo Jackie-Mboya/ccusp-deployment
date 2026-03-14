@@ -147,6 +147,7 @@ def init_db():
                     ccusp_class    INTEGER NOT NULL,
                     ccusp_label    TEXT NOT NULL,
                     threshold_used REAL NOT NULL,
+                    confidence     TEXT,
                     predicted_at   TIMESTAMP DEFAULT NOW()
                 )
             """)
@@ -185,12 +186,17 @@ def init_db():
                     ccusp_class    INTEGER NOT NULL,
                     ccusp_label    TEXT NOT NULL,
                     threshold_used REAL NOT NULL,
+                    confidence     TEXT,
                     predicted_at   TEXT NOT NULL
                 )
             """)
         conn.commit()
+        print("✅ Database initialized successfully with confidence column")
+    except Exception as e:
+        print(f"❌ Error initializing database: {e}")
     finally:
         conn.close()
+
 
 def verify_predictions_table():
     """Check if predictions table has the expected columns"""
@@ -208,14 +214,13 @@ def verify_predictions_table():
             print(f"✅ Predictions table columns: {columns}")
             
             # Check if confidence column exists
-            if 'confidence' in columns:
-                print("✅ confidence column exists")
-            else:
-                print("❌ confidence column MISSING - run ALTER TABLE")
-                # Add it if missing
+            if 'confidence' not in columns:
+                print("❌ confidence column MISSING - adding it now...")
                 cur.execute("ALTER TABLE predictions ADD COLUMN confidence TEXT")
                 conn.commit()
                 print("✅ Added confidence column")
+            else:
+                print("✅ confidence column exists")
         else:
             cur.execute("PRAGMA table_info(predictions)")
             columns = [col[1] for col in cur.fetchall()]
@@ -225,7 +230,6 @@ def verify_predictions_table():
     finally:
         conn.close()
 
-# Call this after init_db() in app.py to ensure the new column is added in deployed environments.
 
 # ── Registration ───────────────────────────────────────────────────────────────
 def register_user(full_name, email, username, password,
@@ -281,10 +285,10 @@ def authenticate(username, password):
             return {"username": u, **{k: v for k, v in adm.items() if k != "password_hash"}}
         return None
 
-    conn, _ = _get_conn()
+    conn, db_type = _get_conn()
     try:
         cur = conn.cursor()
-        ph  = "%s" if _ == "postgres" else "?"
+        ph  = "%s" if db_type == "postgres" else "?"
         cur.execute(
             f"SELECT id,username,email,password_hash,full_name,specialty,"
             f"hospital,country_income,provider_type,registered_at "
@@ -316,7 +320,6 @@ def authenticate(username, password):
 
 
 # ── Save prediction ────────────────────────────────────────────────────────────
-# ── Save prediction ────────────────────────────────────────────────────────────
 def save_prediction(user: dict, inputs: dict, result: dict):
     print("=" * 60)
     print("🔵 SAVE PREDICTION CALLED")
@@ -324,8 +327,9 @@ def save_prediction(user: dict, inputs: dict, result: dict):
     print(f"📊 Result: {result}")
     print("=" * 60)
     
+    # Show in app UI
     import streamlit as st
-    st.error(f"🔴 save_prediction() WAS CALLED! User: {user.get('username')}")
+    st.info(f"💾 Saving assessment for {user.get('username')}...")
     
     conn, db_type = _get_conn()
     ph = "%s" if db_type == "postgres" else "?"
@@ -380,6 +384,7 @@ def save_prediction(user: dict, inputs: dict, result: dict):
         
         conn.commit()
         print("✅ COMMIT SUCCESSFUL!")
+        st.success(f"✅ Assessment saved successfully for {user.get('username')}!")
         
         # Verify the insert
         cur.execute(f"SELECT COUNT(*) FROM predictions WHERE username = {ph}", (user.get("username", ""),))
@@ -390,10 +395,12 @@ def save_prediction(user: dict, inputs: dict, result: dict):
         print(f"❌ ERROR: {e}")
         import traceback
         traceback.print_exc()
+        st.error(f"❌ Error saving assessment: {e}")
         conn.rollback()
     finally:
         conn.close()
         print("=" * 60)
+
 
 # ── Admin queries ──────────────────────────────────────────────────────────────
 def get_predictions_df() -> pd.DataFrame:
@@ -439,6 +446,7 @@ def get_practitioners_df() -> pd.DataFrame:
         return pd.DataFrame()
     finally:
         conn.close()
+
 
 def debug_check_tables():
     """Debug function to check if tables exist and have correct schema"""
@@ -514,8 +522,8 @@ def count_predictions():
 
 
 def get_recent_registrations(n=5):
-    conn, _ = _get_conn()
-    ph = "%s" if _ == "postgres" else "?"
+    conn, db_type = _get_conn()
+    ph = "%s" if db_type == "postgres" else "?"
     try:
         cur = conn.cursor()
         cur.execute(
@@ -608,6 +616,7 @@ def delete_practitioner_complete(username):
 
 
 def get_user_predictions(username):
+    """Return all predictions for a specific user as a DataFrame."""
     conn, db_type = _get_conn()
     ph = "%s" if db_type == "postgres" else "?"
     try:
