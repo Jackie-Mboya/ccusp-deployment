@@ -324,6 +324,9 @@ def save_prediction(user: dict, inputs: dict, result: dict):
     print(f"📊 Result: {result}")
     print("=" * 60)
     
+    import streamlit as st
+    st.error(f"🔴 save_prediction() WAS CALLED! User: {user.get('username')}")
+    
     conn, db_type = _get_conn()
     ph = "%s" if db_type == "postgres" else "?"
     
