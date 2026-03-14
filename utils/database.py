@@ -436,3 +436,48 @@ def get_provider_counts():
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def role_color(role):
     return {"practitioner": "#1B6CA8", "admin": "#7C3AED"}.get(role, "#64748B")
+
+
+def delete_practitioner_complete(username):
+    """
+    Delete a practitioner and all their predictions.
+    Returns (success: bool, message: str).
+    """
+    conn, db_type = _get_conn()
+    ph = "%s" if db_type == "postgres" else "?"
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT full_name FROM practitioners WHERE username={ph}", (username,))
+        user = cur.fetchone()
+        if not user:
+            return False, f"User '{username}' not found."
+        full_name = user[0]
+        cur.execute(f"DELETE FROM predictions WHERE username={ph}", (username,))
+        predictions_deleted = cur.rowcount
+        cur.execute(f"DELETE FROM practitioners WHERE username={ph}", (username,))
+        user_deleted = cur.rowcount > 0
+        conn.commit()
+        if user_deleted:
+            return True, (f"✅ Deleted {full_name} and "
+                          f"{predictions_deleted} assessment"
+                          f"{'s' if predictions_deleted != 1 else ''}.")
+        return False, "Failed to delete user."
+    except Exception as e:
+        conn.rollback()
+        return False, f"Error: {e}"
+    finally:
+        conn.close()
+
+
+def get_user_predictions(username):
+    """Return all predictions for a specific user as a DataFrame."""
+    conn, db_type = _get_conn()
+    ph = "%s" if db_type == "postgres" else "?"
+    try:
+        return pd.read_sql_query(
+            f"SELECT * FROM predictions WHERE username={ph} ORDER BY predicted_at DESC",
+            conn, params=(username,))
+    except Exception:
+        return pd.DataFrame()
+    finally:
+        conn.close()
