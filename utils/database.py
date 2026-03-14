@@ -192,6 +192,40 @@ def init_db():
     finally:
         conn.close()
 
+def verify_predictions_table():
+    """Check if predictions table has the expected columns"""
+    conn, db_type = _get_conn()
+    try:
+        cur = conn.cursor()
+        if db_type == "postgres":
+            cur.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'predictions'
+                ORDER BY ordinal_position
+            """)
+            columns = [col[0] for col in cur.fetchall()]
+            print(f"✅ Predictions table columns: {columns}")
+            
+            # Check if confidence column exists
+            if 'confidence' in columns:
+                print("✅ confidence column exists")
+            else:
+                print("❌ confidence column MISSING - run ALTER TABLE")
+                # Add it if missing
+                cur.execute("ALTER TABLE predictions ADD COLUMN confidence TEXT")
+                conn.commit()
+                print("✅ Added confidence column")
+        else:
+            cur.execute("PRAGMA table_info(predictions)")
+            columns = [col[1] for col in cur.fetchall()]
+            print(f"✅ Predictions table columns: {columns}")
+    except Exception as e:
+        print(f"❌ Error verifying table: {e}")
+    finally:
+        conn.close()
+
+# Call this after init_db() in app.py to ensure the new column is added in deployed environments.
 
 # ── Registration ───────────────────────────────────────────────────────────────
 def register_user(full_name, email, username, password,
