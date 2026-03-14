@@ -318,19 +318,29 @@ def save_prediction(user: dict, inputs: dict, result: dict):
             now,
         ))
         conn.commit()
-    except Exception:
-        pass  # never crash the app on a log failure
+    except Exception as e:
+        import traceback
+        print(f"[save_prediction ERROR] {e}")
+        print(traceback.format_exc())
     finally:
         conn.close()
 
 
 # ── Admin queries ──────────────────────────────────────────────────────────────
 def get_predictions_df() -> pd.DataFrame:
-    conn, _ = _get_conn()
+    conn, db_type = _get_conn()
     try:
-        return pd.read_sql_query(
+        df = pd.read_sql_query(
             "SELECT * FROM predictions ORDER BY predicted_at DESC", conn)
-    except Exception:
+        if not df.empty and "predicted_at" in df.columns:
+            df["predicted_at"] = pd.to_datetime(df["predicted_at"]).dt.strftime("%Y-%m-%d %H:%M:%S")
+        if not df.empty and "probability" in df.columns:
+            df["probability"] = df["probability"].astype(float)
+        return df
+    except Exception as e:
+        import traceback
+        print(f"[get_predictions_df ERROR] {e}")
+        print(traceback.format_exc())
         return pd.DataFrame()
     finally:
         conn.close()

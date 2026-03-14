@@ -14,6 +14,11 @@ from utils.model_loader import predict_from_ui, EXPECTED_COLUMNS
 from utils.shap_explainer import get_shap_explanation, plot_shap_waterfall
 from utils.database import save_prediction, get_predictions_df, SPECIALTIES
 
+@st.cache_data(ttl=3)
+def _cached_predictions():
+    """Re-fetched every 3 seconds so pages stay in sync after a new assessment."""
+    return get_predictions_df()
+
 # ── Option lists ──────────────────────────────────────────────────────────────
 _YRS     = ["<5 years", "5-10 years", "11-20 years", ">20 years"]
 _ICU_VOL = ["<500", "500-1000", "1000-2000", "2000-3000", ">3000"]
@@ -83,7 +88,7 @@ def _render_dashboard(user, models):
     """, unsafe_allow_html=True)
 
     # Pull this user's predictions from DB
-    all_df = get_predictions_df()
+    all_df = _cached_predictions()
     my_df  = all_df[all_df["username"] == user["username"]] if not all_df.empty else pd.DataFrame()
 
     # ── KPI metrics ───────────────────────────────────────────────────────────
@@ -275,6 +280,7 @@ def _render_assessment(models, user):
 
     # Save to DB so dashboard + history update immediately
     save_prediction(user, ui_dict, result)
+    st.cache_data.clear()
 
     # ── Result card ───────────────────────────────────────────────────────────
     st.markdown("---")
@@ -319,7 +325,7 @@ def _render_history(user):
     # REMOVED: Navigation options at the top
     # REMOVED: Current page indicator
 
-    all_df = get_predictions_df()
+    all_df = _cached_predictions()
     my_df  = (all_df[all_df["username"] == user["username"]].copy()
               if not all_df.empty else pd.DataFrame())
 
@@ -436,7 +442,7 @@ def _render_benchmarks(user):
     # REMOVED: Navigation options at the top
     # REMOVED: Current page indicator
 
-    all_df = get_predictions_df()
+    all_df = _cached_predictions()
     if all_df.empty:
         st.info("No benchmark data available yet — assessments from all practitioners "
                 "will appear here once submitted.", icon="ℹ️")
