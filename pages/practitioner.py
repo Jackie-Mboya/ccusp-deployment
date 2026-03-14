@@ -278,32 +278,29 @@ def _render_assessment(models, user):
         "confidence":  conf,
     }
 
-    # DEBUG: Print before saving
-    print("🟢 About to call save_prediction...")
-    print(f"🟢 User: {user.get('username')}")
-    print(f"🟢 Result: {result}")
+    # DEBUG: Show what we're trying to save
+    st.warning(f"🔍 Attempting to save assessment for {user.get('username')}...")
     
-    # Save to DB so dashboard + history update immediately
-    save_prediction(user, ui_dict, result)
+    try:
+        # Save to DB so dashboard + history update immediately
+        save_prediction(user, ui_dict, result)
+        st.success("✅ save_prediction() completed without errors!")
+    except Exception as e:
+        st.error(f"❌ Error in save_prediction: {e}")
     
-    print("🟢 save_prediction completed")
     st.cache_data.clear()
 
     # Verify the save
     all_df = _cached_predictions()
     my_df = all_df[all_df["username"] == user["username"]] if not all_df.empty else pd.DataFrame()
-    print(f"📊 After save - User has {len(my_df)} predictions in DataFrame")
-
-    # Show success message with count
-    # Show success message with count
     count = len(my_df)
-    st.success(f"✅ Assessment saved successfully! You now have {count} total assessment(s).", icon="✅")
-
-    # ADD THIS TEMPORARY DEBUG
-    if count == 0:
-        st.error("⚠️ WARNING: No data found in database after save! Check logs.")
+    
+    if count > 0:
+        st.success(f"✅ VERIFICATION SUCCESS: Found {count} assessments in database!")
+        with st.expander("📋 View your saved assessment data"):
+            st.dataframe(my_df[['predicted_at', 'probability', 'ccusp_label']].head())
     else:
-        st.info(f"✅ Database verification: Found {count} records for {user.get('username')}")
+        st.error(f"❌ VERIFICATION FAILED: No assessments found in database for {user.get('username')}!")
 
     # ── Result card ───────────────────────────────────────────────────────────
     st.markdown("---")
