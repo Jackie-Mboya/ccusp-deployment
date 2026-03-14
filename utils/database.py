@@ -317,27 +317,25 @@ def authenticate(username, password):
 
 # ── Save prediction ────────────────────────────────────────────────────────────
 # ── Save prediction ────────────────────────────────────────────────────────────
-# ── Save prediction ────────────────────────────────────────────────────────────
 def save_prediction(user: dict, inputs: dict, result: dict):
+    print("=" * 60)
+    print("🔵 SAVE PREDICTION CALLED")
+    print(f"👤 User: {user.get('username')}")
+    print(f"📊 Result: {result}")
+    print("=" * 60)
+    
     conn, db_type = _get_conn()
     ph = "%s" if db_type == "postgres" else "?"
+    
     try:
         cur = conn.cursor()
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # Get confidence from result or calculate it
+        # Get confidence from result
         confidence = result.get("confidence", "Moderate")
         
-        cur.execute(f"""
-            INSERT INTO predictions
-                (username, full_name, specialty, hospital,
-                 provider_type, country_income,
-                 pop, yrs, icu_vol, hosp_type,
-                 extra_training, cert, manages_icu,
-                 probability, ccusp_class, ccusp_label,
-                 threshold_used, confidence, predicted_at)
-            VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
-        """, (
+        # Log the exact values being inserted
+        values = (
             user.get("username", ""),
             user.get("name", ""),
             user.get("specialty", inputs.get("specialty", "")),
@@ -355,16 +353,44 @@ def save_prediction(user: dict, inputs: dict, result: dict):
             result["class"],
             result["label"],
             result["threshold"],
-            confidence,  # Add confidence here
+            confidence,
             now,
-        ))
+        )
+        
+        print("📝 Inserting values:")
+        print(f"  username: {values[0]}")
+        print(f"  full_name: {values[1]}")
+        print(f"  probability: {values[13]}")
+        print(f"  confidence: {values[17]}")
+        
+        # Try to insert
+        cur.execute(f"""
+            INSERT INTO predictions
+                (username, full_name, specialty, hospital,
+                 provider_type, country_income,
+                 pop, yrs, icu_vol, hosp_type,
+                 extra_training, cert, manages_icu,
+                 probability, ccusp_class, ccusp_label,
+                 threshold_used, confidence, predicted_at)
+            VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
+        """, values)
+        
         conn.commit()
+        print("✅ COMMIT SUCCESSFUL!")
+        
+        # Verify the insert
+        cur.execute(f"SELECT COUNT(*) FROM predictions WHERE username = {ph}", (user.get("username", ""),))
+        count = cur.fetchone()[0]
+        print(f"📊 User now has {count} total predictions")
+        
     except Exception as e:
+        print(f"❌ ERROR: {e}")
         import traceback
-        print(f"[save_prediction ERROR] {e}")
-        print(traceback.format_exc())
+        traceback.print_exc()
+        conn.rollback()
     finally:
         conn.close()
+        print("=" * 60)
 
 # ── Admin queries ──────────────────────────────────────────────────────────────
 def get_predictions_df() -> pd.DataFrame:

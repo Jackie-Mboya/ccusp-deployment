@@ -175,149 +175,18 @@ def _render_dashboard(user, models):
 # ─────────────────────────────────────────────────────────────────────────────
 # SELF-ASSESSMENT
 # ─────────────────────────────────────────────────────────────────────────────
-def _render_assessment(models, user):
-    st.markdown("""
-    <div class="page-header">
-        <h2>🩺 CCUSP Self-Assessment</h2>
-        <p>Complete your clinical profile to receive a live model prediction.</p>
-    </div>
-    """, unsafe_allow_html=True)
+# Save to DB so dashboard + history update immediately
+print("🟢 About to call save_prediction...")
+save_prediction(user, ui_dict, result)
+print("🟢 save_prediction completed")
+st.cache_data.clear()
 
-    # REMOVED: Navigation buttons at the top
-    # REMOVED: Current page indicator
+# Verify the save
+all_df = _cached_predictions()
+my_df = all_df[all_df["username"] == user["username"]] if not all_df.empty else pd.DataFrame()
+print(f"📊 After save - User has {len(my_df)} predictions in DataFrame")
 
-    default_specialty = user.get("specialty", SPECIALTIES[0])
-    default_income    = user.get("country_income", "High Income")
-    default_ptype     = user.get("provider_type", "Physician")
-
-    with st.form("assess_form", clear_on_submit=False):
-        st.markdown("#### Clinical Profile")
-        st.caption(
-            "Fields pre-filled from your registration profile. "
-            "All fields are required for an accurate prediction."
-        )
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.markdown('<p class="group-label">Background</p>', unsafe_allow_html=True)
-            provider_type = st.selectbox(
-                "Provider type", ["Physician", "APN"],
-                index=0 if default_ptype == "Physician" else 1, key="sa_pt")
-            income = st.selectbox(
-                "Country income level", ["High Income", "LMIC"],
-                index=0 if default_income == "High Income" else 1, key="sa_inc")
-            pop      = st.selectbox("Patient population", _POP, key="sa_pop")
-            specialty = st.selectbox(
-                "Specialty", SPECIALTIES,
-                index=SPECIALTIES.index(default_specialty)
-                      if default_specialty in SPECIALTIES else 0,
-                key="sa_spec")
-
-        with col2:
-            st.markdown('<p class="group-label">Experience</p>', unsafe_allow_html=True)
-            yrs     = st.selectbox("Years in specialty",       _YRS,     index=1, key="sa_yrs")
-            icu_vol = st.selectbox("Annual ICU patient volume", _ICU_VOL, index=1, key="sa_vol")
-            hosp_type = st.selectbox("Hospital type",          _HOSP,            key="sa_ht")
-            manages   = st.selectbox("Manages critically ill patients?", _YN,    key="sa_mgr")
-
-        with col3:
-            st.markdown('<p class="group-label">Training</p>', unsafe_allow_html=True)
-            extra = st.selectbox("Additional ultrasound training?", _YN, key="sa_ex")
-            cert  = st.selectbox("Advanced POCUS Certification?",   _YN, key="sa_cert")
-            st.markdown("<br>", unsafe_allow_html=True)
-            threshold_override = st.checkbox("Use custom threshold", value=False, key="sa_tcb")
-            custom_thresh = st.slider(
-                "Threshold", min_value=0.10, max_value=0.90,
-                value=float(models["threshold"]), step=0.01,
-                disabled=not threshold_override, key="sa_tsl",
-                help=f"Youden-optimal = {models['threshold']:.4f}")
-
-        st.markdown("---")
-        submitted = st.form_submit_button(
-            "🔍  Run Prediction", use_container_width=True, type="primary")
-
-    if not submitted:
-        _how_to_use(models)
-        return
-
-    ui_dict = {
-        "provider_type": provider_type,
-        "income":        income,
-        "pop":           pop,
-        "yrs":           yrs,
-        "specialty":     specialty,
-        "icu_vol":       icu_vol,
-        "hosp_type":     hosp_type,
-        "extra":         extra,
-        "cert":          cert,
-        "manages":       manages,
-    }
-    thresh = custom_thresh if threshold_override else models["threshold"]
-
-    try:
-        prob, pred, X_sc = predict_from_ui(models, ui_dict,
-                                           use_youden=not threshold_override)
-        if threshold_override:
-            pred = int(prob >= thresh)
-    except Exception as e:
-        st.error(f"Prediction error: {e}")
-        return
-
-    label   = "High CCUSP" if pred == 1 else "Low CCUSP"
-    is_high = pred == 1
-    conf = ("High" if prob >= 0.75 or prob <= 0.25 else
-            "Moderate" if prob >= 0.62 or prob <= 0.38 else
-            "Low (near boundary)")
-
-    result = {
-        "probability": round(prob, 4),
-        "class":       pred,
-        "label":       label,
-        "threshold":   round(float(thresh), 4),
-        "confidence":  conf,
-    }
-
-    # Save to DB so dashboard + history update immediately
-    # Save to DB so dashboard + history update immediately
-    save_prediction(user, ui_dict, result)
-    st.cache_data.clear()
-
-    # Verify the save
-    all_df = _cached_predictions()
-    my_df = all_df[all_df["username"] == user["username"]] if not all_df.empty else pd.DataFrame()
-    print(f"After save - User has {len(my_df)} predictions in DataFrame")
-
-    st.success("✅ Assessment saved successfully!", icon="✅")
-
-
-    # ── Result card ───────────────────────────────────────────────────────────
-    st.markdown("---")
-    card_cls = "result-high" if is_high else "result-low"
-    icon     = "✅" if is_high else "⚠️"
-    ability  = ("likely able to independently perform 2 or more core CCUS procedures"
-                if is_high else
-                "unlikely to independently perform 2 or more core CCUS procedures")
-    st.markdown(f"""
-    <div class="result-card {card_cls}">
-        <div class="result-icon">{icon}</div>
-        <div>
-            <div class="result-label">{label}</div>
-            <div class="result-body">
-                Based on your profile, you are <strong>{ability}</strong>.<br>
-                Predicted probability: <strong>{prob:.1%}</strong>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Prediction",  label)
-    m2.metric("Probability", f"{prob:.1%}")
-    m3.metric("Threshold",   f"{thresh:.4f}")
-    m4.metric("Confidence",  conf)
-
-    # REMOVED: Navigation buttons after assessment
+st.success("✅ Assessment saved successfully!", icon="✅")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
