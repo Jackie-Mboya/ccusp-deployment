@@ -336,8 +336,11 @@ def save_prediction(user: dict, inputs: dict, result: dict):
 def get_predictions_df() -> pd.DataFrame:
     conn, db_type = _get_conn()
     try:
-        df = pd.read_sql_query(
-            "SELECT * FROM predictions ORDER BY predicted_at DESC", conn)
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM predictions ORDER BY predicted_at DESC")
+        rows = cur.fetchall()
+        cols = [d[0] for d in cur.description]
+        df = pd.DataFrame(rows, columns=cols)
         if not df.empty and "predicted_at" in df.columns:
             df["predicted_at"] = pd.to_datetime(df["predicted_at"]).dt.strftime("%Y-%m-%d %H:%M:%S")
         if not df.empty and "probability" in df.columns:
@@ -353,13 +356,23 @@ def get_predictions_df() -> pd.DataFrame:
 
 
 def get_practitioners_df() -> pd.DataFrame:
-    conn, _ = _get_conn()
+    conn, db_type = _get_conn()
     try:
-        return pd.read_sql_query(
+        cur = conn.cursor()
+        cur.execute(
             "SELECT full_name,specialty,hospital,country_income,"
-            "provider_type,registered_at FROM practitioners ORDER BY registered_at DESC",
-            conn)
-    except Exception:
+            "provider_type,registered_at FROM practitioners ORDER BY registered_at DESC"
+        )
+        rows = cur.fetchall()
+        cols = [d[0] for d in cur.description]
+        df = pd.DataFrame(rows, columns=cols)
+        if not df.empty and "registered_at" in df.columns:
+            df["registered_at"] = pd.to_datetime(df["registered_at"]).dt.strftime("%Y-%m-%d %H:%M:%S")
+        return df
+    except Exception as e:
+        import traceback
+        print(f"[get_practitioners_df ERROR] {e}")
+        print(traceback.format_exc())
         return pd.DataFrame()
     finally:
         conn.close()
@@ -532,14 +545,18 @@ def delete_practitioner_complete(username):
 
 
 def get_user_predictions(username):
-    """Return all predictions for a specific user as a DataFrame."""
     conn, db_type = _get_conn()
     ph = "%s" if db_type == "postgres" else "?"
     try:
-        return pd.read_sql_query(
+        cur = conn.cursor()
+        cur.execute(
             f"SELECT * FROM predictions WHERE username={ph} ORDER BY predicted_at DESC",
-            conn, params=(username,))
-    except Exception:
+            (username,))
+        rows = cur.fetchall()
+        cols = [d[0] for d in cur.description]
+        return pd.DataFrame(rows, columns=cols)
+    except Exception as e:
+        print(f"[get_user_predictions ERROR] {e}")
         return pd.DataFrame()
     finally:
         conn.close()
