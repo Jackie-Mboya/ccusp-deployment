@@ -1,0 +1,15 @@
+{
+  "model_name": "Ensemble LASSO",
+  "f1_score": 0.8385,
+  "accuracy": 0.7655,
+  "precision": 0.8191,
+  "recall": 0.859,
+  "auc_roc": 0.7244,
+  "auprc": 0.8481,
+  "threshold": 0.4023,
+  "cv_folds": 3,
+  "inference_ms": 3.316,
+  "train_time_s": 20.168,
+  "training_date": "2026-03-13",
+  "notes": "Tuned Ensemble LASSO with Youden threshold"
+}
