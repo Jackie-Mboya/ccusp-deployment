@@ -279,8 +279,15 @@ def _render_assessment(models, user):
     }
 
     # Save to DB so dashboard + history update immediately
+    # Save to DB so dashboard + history update immediately
     save_prediction(user, ui_dict, result)
     st.cache_data.clear()
+
+    # Verify the save
+    all_df = _cached_predictions()
+    my_df = all_df[all_df["username"] == user["username"]] if not all_df.empty else pd.DataFrame()
+    print(f"After save - User has {len(my_df)} predictions in DataFrame")
+
     st.success("✅ Assessment saved successfully!", icon="✅")
 
 

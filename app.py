@@ -41,6 +41,7 @@ st.markdown("""
 
 # ── Initialise DB on every startup ────────────────────────────────────────────
 init_db()
+debug_check_tables()
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  GLOBAL CSS

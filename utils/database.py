@@ -282,22 +282,24 @@ def authenticate(username, password):
 
 
 # ── Save prediction ────────────────────────────────────────────────────────────
+# ── Save prediction ────────────────────────────────────────────────────────────
 def save_prediction(user: dict, inputs: dict, result: dict):
     conn, db_type = _get_conn()
     ph = "%s" if db_type == "postgres" else "?"
+    
+    print("=" * 50)
+    print("SAVE PREDICTION CALLED")
+    print(f"User: {user.get('username')}")
+    print(f"DB Type: {db_type}")
+    print(f"Result: {result}")
+    print("=" * 50)
+    
     try:
         cur = conn.cursor()
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cur.execute(f"""
-            INSERT INTO predictions
-                (username, full_name, specialty, hospital,
-                 provider_type, country_income,
-                 pop, yrs, icu_vol, hosp_type,
-                 extra_training, cert, manages_icu,
-                 probability, ccusp_class, ccusp_label,
-                 threshold_used, predicted_at)
-            VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
-        """, (
+        
+        # Log the values being inserted
+        values = (
             user.get("username", ""),
             user.get("name", ""),
             user.get("specialty", inputs.get("specialty", "")),
@@ -316,15 +318,39 @@ def save_prediction(user: dict, inputs: dict, result: dict):
             result["label"],
             result["threshold"],
             now,
-        ))
+        )
+        
+        print(f"Inserting {len(values)} values")
+        print(f"First few values: username={values[0]}, name={values[1]}, probability={values[13]}")
+        
+        query = f"""
+            INSERT INTO predictions
+                (username, full_name, specialty, hospital,
+                 provider_type, country_income,
+                 pop, yrs, icu_vol, hosp_type,
+                 extra_training, cert, manages_icu,
+                 probability, ccusp_class, ccusp_label,
+                 threshold_used, predicted_at)
+            VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
+        """
+        
+        print(f"Query: {query}")
+        cur.execute(query, values)
         conn.commit()
+        
+        # Verify the save
+        cur.execute(f"SELECT COUNT(*) FROM predictions WHERE username = {ph}", (user.get("username", ""),))
+        count = cur.fetchone()[0]
+        print(f"✅ SUCCESS! User now has {count} total predictions")
+        
     except Exception as e:
+        print(f"❌ ERROR in save_prediction: {e}")
         import traceback
-        print(f"[save_prediction ERROR] {e}")
-        print(traceback.format_exc())
+        traceback.print_exc()
+        conn.rollback()
     finally:
         conn.close()
-
+        print("=" * 50)
 
 # ── Admin queries ──────────────────────────────────────────────────────────────
 def get_predictions_df() -> pd.DataFrame:
@@ -358,6 +384,41 @@ def get_practitioners_df() -> pd.DataFrame:
     finally:
         conn.close()
 
+def debug_check_tables():
+    """Debug function to check if tables exist and have correct schema"""
+    conn, db_type = _get_conn()
+    try:
+        cur = conn.cursor()
+        if db_type == "postgres":
+            cur.execute("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """)
+            tables = cur.fetchall()
+            print(f"Tables in PostgreSQL: {tables}")
+            
+            # Check predictions table columns
+            cur.execute("""
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_name = 'predictions'
+            """)
+            columns = cur.fetchall()
+            print(f"Predictions table columns: {columns}")
+        else:
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = cur.fetchall()
+            print(f"Tables in SQLite: {tables}")
+            
+            cur.execute("PRAGMA table_info(predictions)")
+            columns = cur.fetchall()
+            print(f"Predictions table columns: {columns}")
+    except Exception as e:
+        print(f"Error checking tables: {e}")
+    finally:
+        conn.close()
+        
 
 def get_all_practitioners():
     conn, _ = _get_conn()
