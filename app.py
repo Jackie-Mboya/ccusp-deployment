@@ -42,6 +42,29 @@ st.markdown("""
 # ── Initialise DB on every startup ────────────────────────────────────────────
 init_db()
 verify_predictions_table()
+# After init_db(), add:
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🔍 Database Status")
+
+try:
+    from utils.database import count_registered, count_predictions, _get_raw_conn
+    
+    # Test connection
+    conn, db_type = _get_raw_conn()
+    conn.close()
+    
+    st.sidebar.success(f"✅ Connected to {db_type}")
+    st.sidebar.info(f"👥 Users: {count_registered()}")
+    st.sidebar.info(f"📊 Predictions: {count_predictions()}")
+    
+    # Show which database is being used
+    if db_type == "postgres":
+        st.sidebar.markdown("🟢 **Using Supabase PostgreSQL**")
+    else:
+        st.sidebar.markdown("🟡 **Using SQLite (local)**")
+        
+except Exception as e:
+    st.sidebar.error(f"❌ DB Error: {str(e)[:100]}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  GLOBAL CSS
