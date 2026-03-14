@@ -3,6 +3,14 @@ from utils.database import authenticate
 
 st.set_page_config(page_title="Login", page_icon="🔐")
 
+st.markdown("""
+    <style>
+        [data-testid="stSidebar"] {display: none !important;}
+        [data-testid="collapsedControl"] {display: none !important;}
+        [data-testid="stSidebarNav"] {display: none !important;}
+    </style>
+""", unsafe_allow_html=True)
+
 # Check if coming from landing page
 if 'login_role' not in st.session_state:
     st.session_state.login_role = None

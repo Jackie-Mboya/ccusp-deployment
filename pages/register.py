@@ -4,6 +4,14 @@ from utils.database import register_user, SPECIALTIES, HOSPITALS, PROVIDER_TYPES
 st.set_page_config(page_title="Register", page_icon="📝")
 
 st.markdown("""
+    <style>
+        [data-testid="stSidebar"] {display: none !important;}
+        [data-testid="collapsedControl"] {display: none !important;}
+        [data-testid="stSidebarNav"] {display: none !important;}
+    </style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
 <div style="text-align: center; margin-bottom: 2rem;">
     <h1 style="font-family: 'DM Serif Display', serif; color: #0C1F2E;">📝 Practitioner Registration</h1>
     <p style="color: #717168;">Create your account to access the CCUSP self-assessment tool</p>

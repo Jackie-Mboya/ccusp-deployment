@@ -16,6 +16,21 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Hide only the default navigation, keep your custom sidebar content
+st.markdown("""
+<style>
+    /* Hide only the default navigation menu */
+    [data-testid="stSidebarNav"] {
+        display: none !important;
+    }
+    
+    /* Keep the sidebar itself visible */
+    [data-testid="stSidebar"] {
+        display: block !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # ── Initialise DB on every startup ────────────────────────────────────────────
 init_db()
 
@@ -302,6 +317,13 @@ button[key="sidebar_signout"] {
 #  LANDING PAGE (when not logged in)
 # ─────────────────────────────────────────────────────────────────────────────
 if not st.session_state.get("logged_in"):
+    st.markdown("""
+        <style>
+            [data-testid="stSidebar"] {display: none !important;}
+            [data-testid="collapsedControl"] {display: none !important;}
+            [data-testid="stSidebarNav"] {display: none !important;}
+        </style>
+    """, unsafe_allow_html=True)
     
     # ── Custom CSS for teal colors ─────────────────────────────────────────
     st.markdown("""
