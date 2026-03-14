@@ -9,7 +9,6 @@
 
 | Role | Username | Password | Notes |
 |------|----------|----------|-------|
-| Admin | `admin` | `admin2025` | Hardcoded, not in DB |
 | Practitioner | *(register first)* | *(you choose)* | Stored in SQLite |
 
 ---
@@ -34,7 +33,7 @@ streamlit run app.py
 
 **Register** → create an account with name, email, specialty, hospital  
 **Sign in** → access your self-assessment form  
-**Run prediction** → live model output (not hardcoded), SHAP explanation  
+**Run prediction** → live model output 
 **Admin dashboard** → all charts generated dynamically from real DB data  
 
 ## File Structure
