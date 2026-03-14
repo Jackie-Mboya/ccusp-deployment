@@ -73,13 +73,24 @@ _ADMINS = {
 # ── Connection factory ─────────────────────────────────────────────────────────
 def _get_conn():
     """
-    Returns a psycopg2 connection if Streamlit secrets contain [database].url,
+    Returns a pg8000 connection if Streamlit secrets contain [database].url,
     otherwise falls back to SQLite for local development.
+    pg8000 is a pure-Python PostgreSQL driver — no binary dependencies,
+    works reliably on Streamlit Cloud.
     """
     try:
         db_url = st.secrets["database"]["url"]
-        import psycopg2
-        return psycopg2.connect(db_url), "postgres"
+        import pg8000.dbapi
+        from urllib.parse import urlparse, unquote
+        p = urlparse(db_url)
+        return pg8000.dbapi.connect(
+            host=p.hostname,
+            port=p.port or 5432,
+            database=p.path.lstrip("/"),
+            user=unquote(p.username),
+            password=unquote(p.password),
+            ssl_context=True,
+        ), "postgres"
     except (KeyError, FileNotFoundError):
         # Local dev fallback — SQLite
         import sqlite3
