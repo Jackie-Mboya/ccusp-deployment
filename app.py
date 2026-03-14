@@ -4,7 +4,7 @@ Run:  streamlit run app.py
 """
 
 import streamlit as st
-from utils.database import init_db, authenticate, register_user, SPECIALTIES, HOSPITALS, PROVIDER_TYPES, INCOME_LEVELS
+from utils.database import init_db, authenticate, register_user, SPECIALTIES, HOSPITALS, PROVIDER_TYPES, INCOME_LEVELS, debug_check_tables
 from utils.model_loader import load_models
 from pages import practitioner, admin
 
