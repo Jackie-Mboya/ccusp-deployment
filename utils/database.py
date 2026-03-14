@@ -1,16 +1,20 @@
 """
-database.py — SQLite user registry for CCUSP demo system.
+database.py — PostgreSQL (Supabase) backend for CCUSP deployment.
 
-Stores registered practitioners. Admin accounts are hardcoded (never in DB).
-File lives at: data/ccusp_users.db  (auto-created on first run)
+Connection string is read from Streamlit secrets:
+    [database]
+    url = "postgresql://postgres:PASSWORD@db.xxxx.supabase.co:5432/postgres"
+
+Falls back to SQLite for local development if no secret is configured.
 """
 
-import os, sqlite3, hashlib, re
+import os
+import hashlib
+import re
 from datetime import datetime
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
-DB_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
-DB_PATH = os.path.join(DB_DIR, 'ccusp_users.db')
+import pandas as pd
+import streamlit as st
 
 # ── Option lists ───────────────────────────────────────────────────────────────
 SPECIALTIES = [
@@ -36,11 +40,11 @@ HOSPITALS = [
     "Other",
 ]
 
-PROVIDER_TYPES  = ["Physician", "APN"]
-INCOME_LEVELS   = ["High Income", "LMIC"]
+PROVIDER_TYPES = ["Physician", "APN"]
+INCOME_LEVELS  = ["High Income", "LMIC"]
 
 
-# ── Hashing ────────────────────────────────────────────────────────────────────
+# ── Password hashing ───────────────────────────────────────────────────────────
 def _h(pw: str) -> str:
     return hashlib.sha256(pw.encode()).hexdigest()
 
@@ -66,54 +70,116 @@ _ADMINS = {
 }
 
 
-# ── DB helpers ─────────────────────────────────────────────────────────────────
-def _conn():
-    os.makedirs(DB_DIR, exist_ok=True)
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
+# ── Connection factory ─────────────────────────────────────────────────────────
+def _get_conn():
+    """
+    Returns a psycopg2 connection if Streamlit secrets contain [database].url,
+    otherwise falls back to SQLite for local development.
+    """
+    try:
+        db_url = st.secrets["database"]["url"]
+        import psycopg2
+        return psycopg2.connect(db_url), "postgres"
+    except (KeyError, FileNotFoundError):
+        # Local dev fallback — SQLite
+        import sqlite3
+        db_dir  = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
+        db_path = os.path.join(db_dir, 'ccusp_users.db')
+        os.makedirs(db_dir, exist_ok=True)
+        return sqlite3.connect(db_path, check_same_thread=False), "sqlite"
 
 
+def _placeholder(db_type: str, n: int = 1) -> str:
+    """Return the correct placeholder for the DB type (%s for PG, ? for SQLite)."""
+    ph = "%s" if db_type == "postgres" else "?"
+    return ", ".join([ph] * n)
+
+
+# ── Schema initialisation ──────────────────────────────────────────────────────
 def init_db():
-    """Create tables on first run. Safe to call on every startup."""
-    with _conn() as con:
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS practitioners (
-                id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                username       TEXT    UNIQUE NOT NULL,
-                email          TEXT    UNIQUE NOT NULL,
-                password_hash  TEXT    NOT NULL,
-                full_name      TEXT    NOT NULL,
-                specialty      TEXT    NOT NULL,
-                hospital       TEXT    NOT NULL,
-                country_income TEXT    NOT NULL DEFAULT 'High Income',
-                provider_type  TEXT    NOT NULL DEFAULT 'Physician',
-                registered_at  TEXT    NOT NULL
-            )
-        """)
-        # Prediction log — added for dynamic analytics
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS predictions (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                username        TEXT NOT NULL,
-                full_name       TEXT NOT NULL,
-                specialty       TEXT NOT NULL,
-                hospital        TEXT NOT NULL,
-                provider_type   TEXT NOT NULL,
-                country_income  TEXT NOT NULL,
-                pop             TEXT,
-                yrs             TEXT,
-                icu_vol         TEXT,
-                hosp_type       TEXT,
-                extra_training  TEXT,
-                cert            TEXT,
-                manages_icu     TEXT,
-                probability     REAL NOT NULL,
-                ccusp_class     INTEGER NOT NULL,
-                ccusp_label     TEXT NOT NULL,
-                threshold_used  REAL NOT NULL,
-                predicted_at    TEXT NOT NULL
-            )
-        """)
-        con.commit()
+    """Create tables if they don't exist. Safe to call on every startup."""
+    conn, db_type = _get_conn()
+    try:
+        cur = conn.cursor()
+        if db_type == "postgres":
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS practitioners (
+                    id            SERIAL PRIMARY KEY,
+                    username      TEXT UNIQUE NOT NULL,
+                    email         TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    full_name     TEXT NOT NULL,
+                    specialty     TEXT NOT NULL,
+                    hospital      TEXT NOT NULL,
+                    country_income TEXT NOT NULL DEFAULT 'High Income',
+                    provider_type  TEXT NOT NULL DEFAULT 'Physician',
+                    registered_at  TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS predictions (
+                    id             SERIAL PRIMARY KEY,
+                    username       TEXT NOT NULL,
+                    full_name      TEXT NOT NULL,
+                    specialty      TEXT NOT NULL,
+                    hospital       TEXT NOT NULL,
+                    provider_type  TEXT NOT NULL,
+                    country_income TEXT NOT NULL,
+                    pop            TEXT,
+                    yrs            TEXT,
+                    icu_vol        TEXT,
+                    hosp_type      TEXT,
+                    extra_training TEXT,
+                    cert           TEXT,
+                    manages_icu    TEXT,
+                    probability    REAL NOT NULL,
+                    ccusp_class    INTEGER NOT NULL,
+                    ccusp_label    TEXT NOT NULL,
+                    threshold_used REAL NOT NULL,
+                    predicted_at   TIMESTAMP DEFAULT NOW()
+                )
+            """)
+        else:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS practitioners (
+                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username       TEXT UNIQUE NOT NULL,
+                    email          TEXT UNIQUE NOT NULL,
+                    password_hash  TEXT NOT NULL,
+                    full_name      TEXT NOT NULL,
+                    specialty      TEXT NOT NULL,
+                    hospital       TEXT NOT NULL,
+                    country_income TEXT NOT NULL DEFAULT 'High Income',
+                    provider_type  TEXT NOT NULL DEFAULT 'Physician',
+                    registered_at  TEXT NOT NULL
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS predictions (
+                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username       TEXT NOT NULL,
+                    full_name      TEXT NOT NULL,
+                    specialty      TEXT NOT NULL,
+                    hospital       TEXT NOT NULL,
+                    provider_type  TEXT NOT NULL,
+                    country_income TEXT NOT NULL,
+                    pop            TEXT,
+                    yrs            TEXT,
+                    icu_vol        TEXT,
+                    hosp_type      TEXT,
+                    extra_training TEXT,
+                    cert           TEXT,
+                    manages_icu    TEXT,
+                    probability    REAL NOT NULL,
+                    ccusp_class    INTEGER NOT NULL,
+                    ccusp_label    TEXT NOT NULL,
+                    threshold_used REAL NOT NULL,
+                    predicted_at   TEXT NOT NULL
+                )
+            """)
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # ── Registration ───────────────────────────────────────────────────────────────
@@ -121,10 +187,6 @@ def register_user(full_name, email, username, password,
                   specialty, hospital,
                   country_income="High Income",
                   provider_type="Physician"):
-    """
-    Register a new practitioner.
-    Returns (True, "") on success or (False, error_message) on failure.
-    """
     username = username.strip().lower()
     email    = email.strip().lower()
 
@@ -139,277 +201,236 @@ def register_user(full_name, email, username, password,
     if username in _ADMINS:
         return False, "That username is reserved. Please choose another."
 
+    conn, db_type = _get_conn()
+    ph = "%s" if db_type == "postgres" else "?"
     try:
-        with _conn() as con:
-            con.execute("""
-                INSERT INTO practitioners
-                    (username, email, password_hash, full_name, specialty,
-                     hospital, country_income, provider_type, registered_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (username, email, _h(password), full_name.strip(),
-                  specialty, hospital, country_income, provider_type,
-                  datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-            con.commit()
+        cur = conn.cursor()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cur.execute(f"""
+            INSERT INTO practitioners
+                (username, email, password_hash, full_name, specialty,
+                 hospital, country_income, provider_type, registered_at)
+            VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
+        """, (username, email, _h(password), full_name.strip(),
+              specialty, hospital, country_income, provider_type, now))
+        conn.commit()
         return True, ""
-    except sqlite3.IntegrityError as e:
-        if "username" in str(e):
+    except Exception as e:
+        err = str(e).lower()
+        if "username" in err or "unique" in err and "username" in err:
             return False, "Username already taken. Please choose another."
-        if "email" in str(e):
+        if "email" in err:
             return False, "An account with that email already exists."
-        return False, "Registration failed. Please try again."
+        return False, f"Registration failed: {e}"
+    finally:
+        conn.close()
 
 
 # ── Authentication ─────────────────────────────────────────────────────────────
 def authenticate(username, password):
-    """Returns user dict on success, None on failure."""
     u = username.strip().lower()
 
-    # Admins first
     if u in _ADMINS:
         adm = _ADMINS[u]
         if adm["password_hash"] == _h(password):
             return {"username": u, **{k: v for k, v in adm.items() if k != "password_hash"}}
         return None
 
-    # Practitioner DB
-    with _conn() as con:
-        row = con.execute(
-            "SELECT id,username,email,password_hash,full_name,specialty,"
-            "hospital,country_income,provider_type,registered_at "
-            "FROM practitioners WHERE username=?", (u,)
-        ).fetchone()
+    conn, _ = _get_conn()
+    try:
+        cur = conn.cursor()
+        ph  = "%s" if _ == "postgres" else "?"
+        cur.execute(
+            f"SELECT id,username,email,password_hash,full_name,specialty,"
+            f"hospital,country_income,provider_type,registered_at "
+            f"FROM practitioners WHERE username={ph}", (u,)
+        )
+        row = cur.fetchone()
+    finally:
+        conn.close()
+
     if row is None:
         return None
-    rec = dict(zip(["id","username","email","password_hash","full_name","specialty",
-                    "hospital","country_income","provider_type","registered_at"], row))
+    cols = ["id","username","email","password_hash","full_name","specialty",
+            "hospital","country_income","provider_type","registered_at"]
+    rec = dict(zip(cols, row))
     if rec["password_hash"] != _h(password):
         return None
     return {
-        "username":      rec["username"],
-        "name":          rec["full_name"],
-        "email":         rec["email"],
-        "role":          "practitioner",
-        "dept":          rec["specialty"],
-        "hospital":      rec["hospital"],
-        "specialty":     rec["specialty"],
-        "country_income":rec["country_income"],
-        "provider_type": rec["provider_type"],
-        "registered_at": rec["registered_at"],
+        "username":       rec["username"],
+        "name":           rec["full_name"],
+        "email":          rec["email"],
+        "role":           "practitioner",
+        "dept":           rec["specialty"],
+        "hospital":       rec["hospital"],
+        "specialty":      rec["specialty"],
+        "country_income": rec["country_income"],
+        "provider_type":  rec["provider_type"],
+        "registered_at":  str(rec["registered_at"]),
     }
 
 
-# ── Prediction log ─────────────────────────────────────────────────────────────
+# ── Save prediction ────────────────────────────────────────────────────────────
 def save_prediction(user: dict, inputs: dict, result: dict):
-    """Persist one prediction so admin analytics are fully dynamic."""
+    conn, db_type = _get_conn()
+    ph = "%s" if db_type == "postgres" else "?"
     try:
-        with _conn() as con:
-            con.execute("""
-                INSERT INTO predictions
-                    (username, full_name, specialty, hospital,
-                     provider_type, country_income,
-                     pop, yrs, icu_vol, hosp_type,
-                     extra_training, cert, manages_icu,
-                     probability, ccusp_class, ccusp_label,
-                     threshold_used, predicted_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (
-                user.get("username", ""),
-                user.get("name", ""),
-                user.get("specialty", inputs.get("specialty", "")),
-                user.get("hospital", ""),
-                user.get("provider_type", inputs.get("provider_type", "")),
-                user.get("country_income", inputs.get("income", "")),
-                inputs.get("pop", ""),
-                inputs.get("yrs", ""),
-                inputs.get("icu_vol", ""),
-                inputs.get("hosp_type", ""),
-                inputs.get("extra", ""),
-                inputs.get("cert", ""),
-                inputs.get("manages", ""),
-                result["probability"],
-                result["class"],
-                result["label"],
-                result["threshold"],
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            ))
-            con.commit()
-    except Exception as e:
-        print(f"Error saving prediction: {e}")  # Log the error for debugging
-        pass  # log failure must never crash the app
+        cur = conn.cursor()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cur.execute(f"""
+            INSERT INTO predictions
+                (username, full_name, specialty, hospital,
+                 provider_type, country_income,
+                 pop, yrs, icu_vol, hosp_type,
+                 extra_training, cert, manages_icu,
+                 probability, ccusp_class, ccusp_label,
+                 threshold_used, predicted_at)
+            VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
+        """, (
+            user.get("username", ""),
+            user.get("name", ""),
+            user.get("specialty", inputs.get("specialty", "")),
+            user.get("hospital", ""),
+            user.get("provider_type", inputs.get("provider_type", "")),
+            user.get("country_income", inputs.get("income", "")),
+            inputs.get("pop", ""),
+            inputs.get("yrs", ""),
+            inputs.get("icu_vol", ""),
+            inputs.get("hosp_type", ""),
+            inputs.get("extra", ""),
+            inputs.get("cert", ""),
+            inputs.get("manages", ""),
+            result["probability"],
+            result["class"],
+            result["label"],
+            result["threshold"],
+            now,
+        ))
+        conn.commit()
+    except Exception:
+        pass  # never crash the app on a log failure
+    finally:
+        conn.close()
 
 
 # ── Admin queries ──────────────────────────────────────────────────────────────
+def get_predictions_df() -> pd.DataFrame:
+    conn, _ = _get_conn()
+    try:
+        return pd.read_sql_query(
+            "SELECT * FROM predictions ORDER BY predicted_at DESC", conn)
+    except Exception:
+        return pd.DataFrame()
+    finally:
+        conn.close()
+
+
+def get_practitioners_df() -> pd.DataFrame:
+    conn, _ = _get_conn()
+    try:
+        return pd.read_sql_query(
+            "SELECT full_name,specialty,hospital,country_income,"
+            "provider_type,registered_at FROM practitioners ORDER BY registered_at DESC",
+            conn)
+    except Exception:
+        return pd.DataFrame()
+    finally:
+        conn.close()
+
+
 def get_all_practitioners():
-    with _conn() as con:
-        rows = con.execute(
+    conn, _ = _get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
             "SELECT id,username,email,full_name,specialty,hospital,"
             "country_income,provider_type,registered_at "
             "FROM practitioners ORDER BY registered_at DESC"
-        ).fetchall()
+        )
+        rows = cur.fetchall()
+    finally:
+        conn.close()
     cols = ["ID","Username","Email","Full Name","Specialty","Hospital",
             "Country Income","Provider Type","Registered At"]
     return [dict(zip(cols, r)) for r in rows]
 
 
 def count_registered():
-    with _conn() as con:
-        return con.execute("SELECT COUNT(*) FROM practitioners").fetchone()[0]
+    conn, _ = _get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM practitioners")
+        return cur.fetchone()[0]
+    finally:
+        conn.close()
 
 
 def count_predictions():
-    with _conn() as con:
-        return con.execute("SELECT COUNT(*) FROM predictions").fetchone()[0]
-
-
-def get_specialty_counts():
-    with _conn() as con:
-        rows = con.execute(
-            "SELECT specialty, COUNT(*) FROM practitioners GROUP BY specialty"
-        ).fetchall()
-    return {r[0]: r[1] for r in rows}
-
-
-def get_income_counts():
-    with _conn() as con:
-        rows = con.execute(
-            "SELECT country_income, COUNT(*) FROM practitioners GROUP BY country_income"
-        ).fetchall()
-    return {r[0]: r[1] for r in rows}
-
-
-def get_provider_counts():
-    with _conn() as con:
-        rows = con.execute(
-            "SELECT provider_type, COUNT(*) FROM practitioners GROUP BY provider_type"
-        ).fetchall()
-    return {r[0]: r[1] for r in rows}
+    conn, _ = _get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM predictions")
+        return cur.fetchone()[0]
+    finally:
+        conn.close()
 
 
 def get_recent_registrations(n=5):
-    with _conn() as con:
-        rows = con.execute(
-            "SELECT full_name,specialty,hospital,registered_at "
-            "FROM practitioners ORDER BY registered_at DESC LIMIT ?", (n,)
-        ).fetchall()
-    return [{"name": r[0], "specialty": r[1], "hospital": r[2], "registered_at": r[3]}
+    conn, _ = _get_conn()
+    ph = "%s" if _ == "postgres" else "?"
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT full_name,specialty,hospital,registered_at "
+            f"FROM practitioners ORDER BY registered_at DESC LIMIT {ph}", (n,)
+        )
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+    return [{"name": r[0], "specialty": r[1], "hospital": r[2], "registered_at": str(r[3])}
             for r in rows]
 
 
 def delete_practitioner(username):
-    """
-    Delete a practitioner and ALL their associated predictions.
-    Returns True if user was deleted, False otherwise.
-    """
-    conn = None
+    conn, db_type = _get_conn()
+    ph = "%s" if db_type == "postgres" else "?"
     try:
-        conn = _conn()
-        cursor = conn.cursor()
-        
-        # First get the user to confirm it exists
-        cursor.execute("SELECT full_name FROM practitioners WHERE username=?", (username,))
-        user = cursor.fetchone()
-        
-        if not user:
-            return False
-        
-        # Delete ALL predictions for this username FIRST
-        cursor.execute("DELETE FROM predictions WHERE username=?", (username,))
-        predictions_deleted = cursor.rowcount
-        print(f"Deleted {predictions_deleted} predictions for user {username}")
-        
-        # Then delete the practitioner
-        cursor.execute("DELETE FROM practitioners WHERE username=?", (username,))
-        user_deleted = cursor.rowcount > 0
-        
+        cur = conn.cursor()
+        cur.execute(f"DELETE FROM practitioners WHERE username={ph}", (username,))
         conn.commit()
-        print(f"Successfully deleted user {username} and {predictions_deleted} predictions")
-        return user_deleted
-        
-    except Exception as e:
-        print(f"Error in delete_practitioner: {e}")
-        if conn:
-            conn.rollback()
-        return False
+        return cur.rowcount > 0
     finally:
-        if conn:
-            conn.close()
+        conn.close()
 
 
-def delete_practitioner_complete(username):
-    """
-    Enhanced version with better feedback.
-    Returns (success, message) tuple.
-    """
-    conn = None
+def get_specialty_counts():
+    conn, _ = _get_conn()
     try:
-        conn = _conn()
-        cursor = conn.cursor()
-        
-        # Get user info first
-        cursor.execute("SELECT full_name FROM practitioners WHERE username=?", (username,))
-        user = cursor.fetchone()
-        
-        if not user:
-            return False, f"User '{username}' not found"
-        
-        full_name = user[0]
-        
-        # Delete all predictions
-        cursor.execute("DELETE FROM predictions WHERE username=?", (username,))
-        predictions_deleted = cursor.rowcount
-        
-        # Delete the user
-        cursor.execute("DELETE FROM practitioners WHERE username=?", (username,))
-        user_deleted = cursor.rowcount > 0
-        
-        conn.commit()
-        
-        if user_deleted:
-            message = f"✅ Deleted {full_name} and {predictions_deleted} assessment{'s' if predictions_deleted != 1 else ''}"
-            return True, message
-        else:
-            return False, "Failed to delete user"
-            
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return False, f"Error: {str(e)}"
+        cur = conn.cursor()
+        cur.execute("SELECT specialty, COUNT(*) FROM practitioners GROUP BY specialty")
+        return {r[0]: r[1] for r in cur.fetchall()}
     finally:
-        if conn:
-            conn.close()
+        conn.close()
 
 
-def get_predictions_df():
-    """Return all predictions as DataFrame for dynamic charting."""
-    import pandas as pd
-    with _conn() as con:
-        df = pd.read_sql_query(
-            "SELECT * FROM predictions ORDER BY predicted_at DESC", con
-        )
-    return df
+def get_income_counts():
+    conn, _ = _get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT country_income, COUNT(*) FROM practitioners GROUP BY country_income")
+        return {r[0]: r[1] for r in cur.fetchall()}
+    finally:
+        conn.close()
 
 
-def get_practitioners_df():
-    """Return all practitioners as DataFrame."""
-    import pandas as pd
-    with _conn() as con:
-        df = pd.read_sql_query(
-            "SELECT full_name,specialty,hospital,country_income,"
-            "provider_type,registered_at FROM practitioners ORDER BY registered_at DESC",
-            con
-        )
-    return df
-
-
-def get_user_predictions(username):
-    """Get all predictions for a specific user."""
-    import pandas as pd
-    with _conn() as con:
-        df = pd.read_sql_query(
-            "SELECT * FROM predictions WHERE username=? ORDER BY predicted_at DESC",
-            con, params=(username,)
-        )
-    return df
+def get_provider_counts():
+    conn, _ = _get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT provider_type, COUNT(*) FROM practitioners GROUP BY provider_type")
+        return {r[0]: r[1] for r in cur.fetchall()}
+    finally:
+        conn.close()
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
