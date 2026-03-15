@@ -9,7 +9,15 @@ import os, sqlite3, hashlib, re
 from datetime import datetime
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-DB_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
+# Detect if running on Streamlit Cloud
+ON_STREAMLIT_CLOUD = os.path.exists('/mount/src')
+
+if ON_STREAMLIT_CLOUD:
+    DB_DIR = '/tmp/ccusp_data'
+else:
+    DB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
+
+os.makedirs(DB_DIR, exist_ok=True)
 DB_PATH = os.path.join(DB_DIR, 'ccusp_users.db')
 
 # ── Option lists ───────────────────────────────────────────────────────────────

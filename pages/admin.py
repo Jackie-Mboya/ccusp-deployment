@@ -312,7 +312,7 @@ def _tab_practitioners_with_drilldown():
     prac_df = get_practitioners_df()
     
     # ── Summary metrics ───────────────────────────────────────────────────────
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Total Registered", n)
     
     # Safely get unique counts
@@ -333,6 +333,12 @@ def _tab_practitioners_with_drilldown():
     except:
         physician_count = 0
     c4.metric("Physicians", physician_count)
+    
+    try:
+        apn_count = int((prac_df["provider_type"] == "APN").sum()) if not prac_df.empty and "provider_type" in prac_df.columns else 0
+    except:
+        apn_count = 0
+    c5.metric("APNs", apn_count)
     
     # Search/filter section
     with st.expander("🔍 Search and Filter Practitioners", expanded=True):
@@ -362,18 +368,15 @@ def _tab_practitioners_with_drilldown():
     
     if search_name:
         filtered_practitioners = [p for p in filtered_practitioners 
-                                 if search_name.lower() in str(p.get("name", "")).lower() or
-                                    search_name.lower() in str(p.get("Name", "")).lower()]
+                                 if search_name.lower() in str(p.get("Full Name", "")).lower()]
     
     if specialty_filter != "All":
         filtered_practitioners = [p for p in filtered_practitioners 
-                                 if p.get("specialty") == specialty_filter or 
-                                    p.get("Specialty") == specialty_filter]
+                                 if p.get("Specialty") == specialty_filter]
     
     if hospital_filter != "All":
         filtered_practitioners = [p for p in filtered_practitioners 
-                                 if p.get("hospital") == hospital_filter or
-                                    p.get("Hospital") == hospital_filter]
+                                 if p.get("Hospital") == hospital_filter]
     
     # Display practitioners in a table with clickable rows
     st.markdown("### Practitioner List")
