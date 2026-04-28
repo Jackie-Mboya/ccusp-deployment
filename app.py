@@ -425,7 +425,7 @@ except FileNotFoundError as e:
 user = st.session_state["current_user"]
 
 with st.sidebar:
-    # Simple "Menu" header instead of "Navigation"
+    # Simple "Menu" header
     st.markdown("""
     <div style="padding:.3rem 0 .7rem; border-bottom:1px solid rgba(197,216,224,.2);
                 margin-bottom:.7rem; font-family:'DM Serif Display',serif;
@@ -434,80 +434,67 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Role-based navigation ─────────────────────────────────────────────
+    # ── Role-based navigation (using buttons instead of radio) ─────────────
     if user["role"] == "admin":
         # Admin navigation - management focused
-        # In app.py - Update the admin navigation section (around line 280-290)
-
-        # Admin navigation - management focused
-        page = st.radio(
-            "Admin Menu",
-            ["🏠  Dashboard", "👥  Users", "📈  Analytics", "🏥  Competencies", "⚙️  Model Analysis"], 
-            label_visibility="collapsed",
-            key="admin_nav"
-        )
-    # In app.py - around line 280-290, replace the practitioner navigation section:
-
+        admin_options = ["🏠  Dashboard", "👥  Users", "📈  Analytics", "🏥  Competencies", "⚙️  Model Analysis"]
+        
+        # Initialize or get current page
+        if "admin_page" not in st.session_state:
+            st.session_state["admin_page"] = admin_options[0]
+        
+        # Create buttons for admin navigation
+        for option in admin_options:
+            # Highlight active button
+            if st.session_state["admin_page"] == option:
+                button_style = """
+                <style>
+                div[data-testid="column"]:nth-child({idx}) button {{
+                    background-color: #188090 !important;
+                    color: white !important;
+                    border-color: #188090 !important;
+                }}
+                </style>
+                """
+            else:
+                button_style = ""
+            
+            if st.button(option, key=f"admin_{option}", use_container_width=True):
+                st.session_state["admin_page"] = option
+                st.rerun()
+        
+        page = st.session_state["admin_page"]
+        
     else:
         # Practitioner navigation - clinical focused
-        # Get current practitioner navigation from session state
+        prac_options = ["🏠  Dashboard", "🩺  Self-Assessment", "📊  My History", "📈  Benchmarks"]
+        
+        # Initialize session state variables if not present
+        if "prac_page" not in st.session_state:
+            st.session_state["prac_page"] = prac_options[0]
         if "prac_nav" not in st.session_state:
             st.session_state["prac_nav"] = "🏠  Dashboard"
         
-        # Map the display names to match _NAV_KEYS in practitioner.py
-        prac_options = ["🏠  Dashboard", "🩺  Self-Assessment", "📊  My History", "📈  Benchmarks"]
-        
-        # Find the index of current selection
-        current_index = prac_options.index(st.session_state["prac_nav"]) if st.session_state["prac_nav"] in prac_options else 0
-        
-        page = st.radio(
-            "Practitioner Menu",
-            prac_options,
-            index=current_index,
-            label_visibility="collapsed",
-            key="practitioner_nav"
-        )
-        
-        # Update session state when radio changes
-        if page != st.session_state["prac_nav"]:
-            st.session_state["prac_nav"] = page
-            st.rerun()
-        
-        # Quick stats for practitioners
-        # st.markdown("---")
-        # st.markdown("""
-        # <div style="font-size:.73rem; opacity:.8;">
-        #     <div style="font-weight:600; margin-bottom:.3rem;">Quick Stats</div>
-        # """, unsafe_allow_html=True)
-
-        # # Get assessment count with ERROR HANDLING
-        # import sqlite3
-        # try:
-        #     conn = sqlite3.connect('predictions.db')
-        #     cursor = conn.cursor()
+        # Create buttons for practitioner navigation
+        for option in prac_options:
+            # Map display name to NAV_KEYS value
+            nav_map = {
+                "🏠  Dashboard": "🏠  Dashboard",
+                "🩺  Self-Assessment": "🩺  Self-Assessment",
+                "📊  My History": "📊  My History",
+                "📈  Benchmarks": "📈  Benchmarks"
+            }
             
-        #     # Check if predictions table exists
-        #     cursor.execute("""
-        #         SELECT name FROM sqlite_master 
-        #         WHERE type='table' AND name='predictions'
-        #     """)
-        #     table_exists = cursor.fetchone() is not None
-            
-        #     if table_exists:
-        #         cursor.execute("SELECT COUNT(*) FROM predictions WHERE user_id = ?", (user.get('id', ''),))
-        #         assessment_count = cursor.fetchone()[0]
-        #     else:
-        #         assessment_count = 0
-        #     conn.close()
-        # except Exception as e:
-        #     assessment_count = 0
-
-        # st.markdown(f"""
-        #     <div style="display:flex; justify-content:space-between;">
-        #         <span>Assessments:</span> <span style="font-weight:600;">{assessment_count}</span>
-        #     </div>
-        # """, unsafe_allow_html=True)
-
+            if st.button(option, key=f"prac_{option}", use_container_width=True):
+                st.session_state["prac_page"] = option
+                st.session_state["prac_nav"] = nav_map[option]  # Update the nav state
+                st.rerun()
+        
+        page = st.session_state["prac_page"]
+        
+        # Also update for compatibility with existing code
+        st.session_state["prac_nav"] = page
+    
     st.markdown("---")
     
     # User info (same for both)
