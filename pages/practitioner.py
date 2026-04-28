@@ -128,14 +128,17 @@ def _render_dashboard(user, models):
         
         if st.button("🩺  New Self-Assessment", use_container_width=True, type="primary", key="dash_new_assess"):
             st.session_state["prac_nav"] = NAV_KEYS["assessment"]
+            st.session_state["prac_page"] = NAV_KEYS["assessment"]  # Also update for button nav
             st.rerun()
         
         if st.button("📊  View My History", use_container_width=True, key="dash_history"):
             st.session_state["prac_nav"] = NAV_KEYS["history"]
+            st.session_state["prac_page"] = NAV_KEYS["history"]
             st.rerun()
         
         if st.button("📈  View Benchmarks", use_container_width=True, key="dash_benchmarks"):
             st.session_state["prac_nav"] = NAV_KEYS["benchmarks"]
+            st.session_state["prac_page"] = NAV_KEYS["benchmarks"]
             st.rerun()
         
         st.caption("Click any button above to navigate")
@@ -302,6 +305,38 @@ def _render_assessment(models, user):
     m3.metric("Threshold",   f"{thresh:.4f}")
     m4.metric("Confidence",  conf)
 
+    # ── SHAP EXPLANATION (AFTER result and metrics) ──────────────────────────
+    st.markdown("---")
+    
+    try:
+        from utils.shap_explainer import (
+            get_shap_explanation, 
+            plot_shap_waterfall, 
+            display_shap_insights
+        )
+        from utils.model_loader import EXPECTED_COLUMNS
+        
+        # Get SHAP explanation using the first model from ensemble
+        shap_model = models['lasso_models'][0]
+        shap_values, expected_value = get_shap_explanation(shap_model, X_sc, EXPECTED_COLUMNS)
+        
+        # Create waterfall plot
+        shap_fig, contributions_df = plot_shap_waterfall(
+            shap_values, expected_value, EXPECTED_COLUMNS, max_features=10
+        )
+        
+        # Display SHAP insights (using the new enhanced function)
+        from utils.shap_explainer import display_shap_insights
+        display_shap_insights(
+            shap_fig,
+            contributions_df,
+            label,
+            prob
+        )
+        
+    except Exception as e:
+        st.info(f"📊 SHAP explanation: {e}")
+    
     # REMOVED: Navigation buttons after assessment
 
 
@@ -329,6 +364,7 @@ def _render_history(user):
         
         if st.button("🩺  Go to Self-Assessment", type="primary", key="history_goto_assess"):
             st.session_state["prac_nav"] = NAV_KEYS["assessment"]
+            st.session_state["prac_page"] = "🩺  Self-Assessment"
             st.rerun()
         return
 
@@ -437,12 +473,14 @@ def _render_benchmarks(user):
     # REMOVED: Current page indicator
 
     all_df = get_predictions_df()
+    
     if all_df.empty:
         st.info("No benchmark data available yet — assessments from all practitioners "
                 "will appear here once submitted.", icon="ℹ️")
         
         if st.button("🩺  Go to Self-Assessment", type="primary", key="bench_goto_assess"):
             st.session_state["prac_nav"] = NAV_KEYS["assessment"]
+            st.session_state["prac_page"] = "🩺  Self-Assessment"
             st.rerun()
         return
 
