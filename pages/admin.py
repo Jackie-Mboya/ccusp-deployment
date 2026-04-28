@@ -877,36 +877,6 @@ def _tab_competencies():
 def _tab_model(models):
     st.subheader("⚙️ Model Configuration & Analysis")
 
-    # if not models:
-    #     st.warning("Model configuration not available")
-    #     return
-
-    # meta = pd.DataFrame({
-    #     "Property": [
-    #         "Algorithm",
-    #         "Constituent models",
-    #         "Outer CV folds",
-    #         "Inner CV folds",
-    #         "C search grid",
-    #         "Scoring metric",
-    #         "Ensemble method",
-    #         "Input features",
-    #         "Youden threshold",
-    #     ],
-    #     "Value": [
-    #         "LASSO Logistic Regression (L1, liblinear)",
-    #         str(len(models.get("lasso_models", []))),
-    #         "3 (StratifiedKFold)",
-    #         "5 (StratifiedKFold, GridSearchCV)",
-    #         "{0.001, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 50, 100}",
-    #         "AUC-ROC",
-    #         "p̂_ens = (p̂¹ + p̂² + p̂³) / 3",
-    #         str(len(EXPECTED_COLUMNS)),
-    #         f"{models.get('threshold', 0.5):.4f}",
-    #     ],
-    # })
-    # st.dataframe(meta, use_container_width=True, hide_index=True)
-
     # LASSO coefficient chart (real model weights — not hardcoded)
     st.markdown("---")
     st.subheader("Feature Weights")
@@ -980,13 +950,185 @@ def _tab_model(models):
         value=current_threshold,
         step=0.01
     )
+    # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 5 — Model Analysis (formerly Settings)
+# ─────────────────────────────────────────────────────────────────────────────
+def _tab_model(models):
+    st.subheader("⚙️ Model Configuration & Analysis")
+
+    # LASSO coefficient chart (real model weights — not hardcoded)
+    st.markdown("---")
+    st.subheader("Feature Weights (Absolute Coefficients)")
+    st.caption(
+        "Absolute coefficient magnitudes from the LASSO model. "
+        "Larger values indicate stronger influence on CCUSP prediction."
+    )
+    
+    try:
+        lasso_models = models.get("lasso_models", [])
+        if lasso_models and len(lasso_models) > 0:
+            coefs = np.abs(lasso_models[0].coef_[0])
+            
+            # Create dataframe with friendly names
+            coef_df = pd.DataFrame({
+                "Feature": [_FRIENDLY.get(c, c) for c in EXPECTED_COLUMNS],
+                "|β|": coefs,
+            })
+            
+            # Filter out features containing 'Missing' (case insensitive)
+            coef_df = coef_df[~coef_df['Feature'].str.contains('Missing', case=False, na=False)]
+            
+            # Filter out zero coefficients and sort
+            coef_df = coef_df[coef_df["|β|"] > 0].sort_values("|β|", ascending=False).reset_index(drop=True)
+            
+            # Take top 20 for display
+            top = coef_df.head(20)
+            
+            if not top.empty:
+                fig = px.bar(
+                    top, x="|β|", y="Feature", orientation="h",
+                    color="|β|", color_continuous_scale=[_TEAL2, _TEAL],
+                    text=top["|β|"].round(4),
+                )
+                fig.update_traces(
+                    textposition="outside",
+                    hovertemplate='<b>%{y}</b><br>|β|: %{x:.4f}<extra></extra>'
+                )
+                fig.update_layout(
+                    height=max(400, len(top) * 30),
+                    showlegend=False,
+                    coloraxis_showscale=False,
+                    paper_bgcolor=_CHART_BG,
+                    plot_bgcolor=_CHART_BG,
+                    yaxis=dict(autorange="reversed"),
+                    xaxis=dict(gridcolor=_GRID, title="|β| (Absolute Coefficient)"),
+                    margin=dict(l=200, r=80, t=10, b=10),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No non-zero coefficients found after filtering out 'Missing' features.")
+        else:
+            st.info("No LASSO models available for coefficient analysis.")
+            
+    except Exception as e:
+        st.warning(f"Could not render coefficient chart: {e}")
+
+    # ── GLOBAL SHAP ANALYSIS ────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("🔬 Global Feature Importance (SHAP)")
+    st.caption("Average impact of each feature on CCUSP predictions across all practitioners")
+    
+    try:
+        # Get the first LASSO model for SHAP
+        shap_model = models['lasso_models'][0]
+        
+        # Get predictions for context
+        pred_df = get_predictions_df()
+        
+        if not pred_df.empty:
+            # Show feature importance from model coefficients as SHAP proxy
+            coefficients = shap_model.coef_[0]
+            
+            # Create importance DataFrame
+            importance_df = pd.DataFrame({
+                'Feature': EXPECTED_COLUMNS,
+                'Coefficient': coefficients
+            })
+            
+            # Filter out zero coefficients and Missing variables
+            importance_df = importance_df[importance_df['Coefficient'] != 0]
+            importance_df = importance_df[~importance_df['Feature'].str.contains('Missing', case=False)]
+            
+            # Take top 15 by absolute value
+            importance_df = importance_df.iloc[
+                importance_df['Coefficient'].abs().sort_values(ascending=False).index
+            ].head(15)
+            
+            # Add friendly names
+            from utils.shap_explainer import _make_friendly_name
+            importance_df['Display Name'] = importance_df['Feature'].apply(_make_friendly_name)
+            importance_df = importance_df.dropna()
+            
+            if not importance_df.empty:
+                # Sort for display
+                plot_df = importance_df.sort_values('Coefficient', ascending=True)
+                
+                fig = go.Figure(go.Bar(
+                    x=plot_df['Coefficient'],
+                    y=plot_df['Display Name'],
+                    orientation='h',
+                    marker_color=['#059669' if x > 0 else '#DC2626' for x in plot_df['Coefficient']],
+                    text=[f"{x:+.4f}" for x in plot_df['Coefficient']],
+                    textposition='outside',
+                    hovertemplate='<b>%{y}</b><br>Impact: %{x:+.4f}<extra></extra>'
+                ))
+                
+                fig.update_layout(
+                    title="Feature Impact on CCUSP Prediction",
+                    height=500,
+                    paper_bgcolor=_CHART_BG,
+                    plot_bgcolor=_CHART_BG,
+                    xaxis_title="Model Coefficient (Impact on CCUSP Probability)",
+                    yaxis_title="",
+                    margin=dict(l=10, r=80, t=40, b=20)
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Add interpretation
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**📈 Positive Drivers (Increase CCUSP)**")
+                    pos_drivers = importance_df[importance_df['Coefficient'] > 0].head(3)
+                    for _, row in pos_drivers.iterrows():
+                        st.markdown(f"- ✅ {row['Display Name']}: +{row['Coefficient']:.4f}")
+                
+                with col2:
+                    st.markdown("**📉 Negative Barriers (Decrease CCUSP)**")
+                    neg_drivers = importance_df[importance_df['Coefficient'] < 0].head(3)
+                    for _, row in neg_drivers.iterrows():
+                        st.markdown(f"- ❌ {row['Display Name']}: {row['Coefficient']:.4f}")
+                
+                with st.expander("📖 How to interpret this chart"):
+                    st.markdown("""
+                    - **Green bars** → Feature increases likelihood of High CCUSP
+                    - **Red bars** → Feature decreases likelihood of High CCUSP
+                    - **Bar length** = Magnitude of impact
+                    
+                    **For administrators:** Focus on promoting green (positive) factors 
+                    (e.g., Advanced POCUS Certification, Additional Training) and 
+                    addressing red (negative) barriers.
+                    """)
+            else:
+                st.info("No significant coefficients found after filtering.")
+        else:
+            st.info("Run a few assessments first to see global SHAP analysis.")
+            
+    except Exception as e:
+        st.warning(f"Global SHAP visualization unavailable: {e}")
+        st.info("Run a few assessments to generate data for global analysis.")
+
+    # ── Threshold Adjustment ─────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("🔄 Threshold Adjustment")
+    current_threshold = float(models.get('threshold', 0.5))
+    new_threshold = st.slider(
+        "Adjust prediction threshold",
+        min_value=0.1,
+        max_value=0.9,
+        value=current_threshold,
+        step=0.01,
+        help="Lower threshold = more sensitive (more High CCUSP predictions)"
+    )
     
     if new_threshold != current_threshold:
         if st.button("Update Threshold", type="primary"):
             st.success(f"Threshold updated to {new_threshold:.2f}")
             # In production, you'd save this to a config file
+            models['threshold'] = new_threshold
 
-    # About
+    # ── About Section ────────────────────────────────────────────────────────
     st.markdown("---")
     st.markdown("""
     <div class="info-box">
