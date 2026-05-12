@@ -80,12 +80,103 @@ h1,h2,h3,h4 { font-family: var(--font-head); }
 [data-testid="stSidebar"] {
     background: linear-gradient(175deg, var(--navy) 0%, #0E2A40 55%, var(--teal) 100%);
 }
-[data-testid="stSidebar"] * { color: #C5D8E0 !important; }
-[data-testid="stSidebar"] hr { border-color: rgba(197,216,224,.2) !important; }
-[data-testid="stSidebar"] .stRadio label {
-    font-size: .93rem; padding: .4rem 0; transition: color .15s; cursor: pointer;
+
+/* Base text color for all sidebar content */
+[data-testid="stSidebar"] .stMarkdown,
+[data-testid="stSidebar"] .stMarkdown div,
+[data-testid="stSidebar"] .stMarkdown p {
+    color: #E8F0F2 !important;
 }
-[data-testid="stSidebar"] .stRadio label:hover { color: #FFFFFF !important; }
+
+[data-testid="stSidebar"] hr { 
+    border-color: rgba(255,255,255,0.1) !important; 
+}
+
+/* Button styling for sidebar */
+[data-testid="stSidebar"] .stButton button {
+    text-align: left !important;
+    justify-content: flex-start !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0.6rem 0.8rem !important;
+    margin: 0.1rem 0 !important;
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    border-radius: 8px !important;
+    transition: all 0.2s ease;
+    width: 100% !important;
+    color: #C5D8E0 !important;
+}
+
+[data-testid="stSidebar"] .stButton button:hover {
+    background: rgba(255,255,255,0.1) !important;
+    color: #FFFFFF !important;
+    transform: translateX(4px);
+}
+
+/* Menu header */
+.sidebar-menu-header {
+    font-family: 'DM Serif Display', serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #9ECBD5 !important;
+    padding: 0.5rem 0.5rem 1rem 0.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    margin-bottom: 0.5rem;
+}
+
+/* User info section */
+.sidebar-user-section {
+    margin-top: 0.5rem;
+    padding: 0.75rem 0.5rem;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.sidebar-user-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #FFFFFF !important;
+    margin-bottom: 0.25rem;
+}
+
+.sidebar-user-role {
+    font-size: 0.7rem;
+    color: #9ECBD5 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.25rem;
+}
+
+.sidebar-user-dept {
+    font-size: 0.65rem;
+    color: #7BA9B5 !important;
+}
+
+/* Sign out button */
+button[key="sidebar_signout"] {
+    background-color: #c0392b !important;
+    color: white !important;
+    border: none !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    justify-content: center !important;
+}
+
+button[key="sidebar_signout"]:hover {
+    background-color: #a93226 !important;
+    transform: none !important;
+}
+
+/* Hide default navigation */
+[data-testid="stSidebarNav"] {
+    display: none !important;
+}
+
+/* Keep sidebar visible */
+[data-testid="stSidebar"] {
+    display: block !important;
+}
 
 /* ── App header ──────────────────────────────────────────────── */
 .app-header {
@@ -299,16 +390,16 @@ h1,h2,h3,h4 { font-family: var(--font-head); }
 ::-webkit-scrollbar-thumb:hover { background: var(--teal-mid); }
 
 /* Force signout button to be visible */
-button[key="sidebar_signout"] {
-    display: block !important;
-    background-color: #c0392b !important;
-    color: white !important;
-    border: 2px solid white !important;
-    font-weight: bold !important;
-    opacity: 1 !important;
-    z-index: 9999 !important;
-    margin: 10px 0 !important;
-}
+# button[key="sidebar_signout"] {
+#     display: block !important;
+#     background-color: #c0392b !important;
+#     color: white !important;
+#     border: 2px solid white !important;
+#     font-weight: bold !important;
+#     opacity: 1 !important;
+#     z-index: 9999 !important;
+#     margin: 10px 0 !important;
+# }
 </style>
 """, unsafe_allow_html=True)
 
@@ -425,139 +516,66 @@ except FileNotFoundError as e:
 user = st.session_state["current_user"]
 
 with st.sidebar:
-    # Simple "Menu" header
+    # Menu header
     st.markdown("""
-    <div style="padding:.3rem 0 .7rem; border-bottom:1px solid rgba(197,216,224,.2);
-                margin-bottom:.7rem; font-family:'DM Serif Display',serif;
-                font-size:1rem; font-weight:700; color:#FFF;">
-        Menu
+    <div class="sidebar-menu-header">
+        MENU
     </div>
     """, unsafe_allow_html=True)
 
     # ── Role-based navigation (using buttons instead of radio) ─────────────
     if user["role"] == "admin":
-        # Admin navigation - management focused
         admin_options = ["🏠  Dashboard", "👥  Users", "📈  Analytics", "🏥  Competencies", "⚙️  Model Analysis"]
-        
-        # Initialize or get current page
         if "admin_page" not in st.session_state:
             st.session_state["admin_page"] = admin_options[0]
         
-        # Create buttons for admin navigation
         for option in admin_options:
-            # Highlight active button
-            if st.session_state["admin_page"] == option:
-                button_style = """
-                <style>
-                div[data-testid="column"]:nth-child({idx}) button {{
-                    background-color: #188090 !important;
-                    color: white !important;
-                    border-color: #188090 !important;
-                }}
-                </style>
-                """
-            else:
-                button_style = ""
-            
             if st.button(option, key=f"admin_{option}", use_container_width=True):
                 st.session_state["admin_page"] = option
                 st.rerun()
-        
         page = st.session_state["admin_page"]
         
     else:
-        # Practitioner navigation - clinical focused
         prac_options = ["🏠  Dashboard", "🩺  Self-Assessment", "📊  My History", "📈  Benchmarks"]
-        
-        # Initialize session state variables if not present
         if "prac_page" not in st.session_state:
             st.session_state["prac_page"] = prac_options[0]
         if "prac_nav" not in st.session_state:
             st.session_state["prac_nav"] = "🏠  Dashboard"
         
-        # Create buttons for practitioner navigation
         for option in prac_options:
-            # Map display name to NAV_KEYS value
             nav_map = {
                 "🏠  Dashboard": "🏠  Dashboard",
                 "🩺  Self-Assessment": "🩺  Self-Assessment",
                 "📊  My History": "📊  My History",
                 "📈  Benchmarks": "📈  Benchmarks"
             }
-            
             if st.button(option, key=f"prac_{option}", use_container_width=True):
                 st.session_state["prac_page"] = option
-                st.session_state["prac_nav"] = nav_map[option]  # Update the nav state
+                st.session_state["prac_nav"] = nav_map[option]
                 st.rerun()
-        
         page = st.session_state["prac_page"]
-        
-        # Also update for compatibility with existing code
         st.session_state["prac_nav"] = page
     
     st.markdown("---")
     
-    # User info (same for both)
+    # User info section - IMPROVED (same for both roles)
     st.markdown(f"""
-    <div style="font-size:.78rem; line-height:1.9; opacity:.85;">
-        <div style="font-weight:700; font-size:.7rem; letter-spacing:.06em;
-                    text-transform:uppercase; opacity:.7; margin-bottom:.3rem;">
-            Signed in as
-        </div>
-        <div style="color:#FFF; font-size:.9rem;">{user['name']}</div>
-        <div style="font-style:italic;">{user.get('role','').title()}</div>
-        <div style="font-size:.75rem; opacity:.7;">{user.get('dept','')}</div>
+    <div class="sidebar-user-section">
+        <div class="sidebar-user-name">{user['name']}</div>
+        <div class="sidebar-user-role">{user.get('role', '').title()}</div>
+        <div class="sidebar-user-dept">{user.get('dept', user.get('specialty', ''))}</div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Model metrics (same for both)
-    # st.markdown("---")
-    # if 'metrics' in models:
-    #     m = models['metrics']
-    #     st.markdown(f"""
-    #     <div style="font-size:.73rem; line-height:1.85; opacity:.7;">
-    #         <div style="font-weight:700; font-size:.69rem; letter-spacing:.06em;
-    #                     text-transform:uppercase; margin-bottom:.2rem;">🎯 {m['model_name']}</div>
-    #         <table style="width:100%; font-size:.73rem; margin-top:.3rem;">
-    #             <tr><td>F1-Score:</td><td style="text-align:right; font-weight:600;">{m['f1_score']:.4f}</td></tr>
-    #             <tr><td>Accuracy:</td><td style="text-align:right; font-weight:600;">{m['accuracy']:.4f}</td></tr>
-    #             <tr><td>Precision:</td><td style="text-align:right; font-weight:600;">{m['precision']:.4f}</td></tr>
-    #             <tr><td>Recall:</td><td style="text-align:right; font-weight:600;">{m['recall']:.4f}</td></tr>
-    #         </table>
-    #         <div style="margin-top:.5rem; border-top:1px solid rgba(197,216,224,.2); padding-top:.4rem;">
-    #             <span style="font-weight:500;">{m['cv_folds']}‑fold CV</span> · Threshold: <strong>{models['threshold']:.4f}</strong>
-    #         </div>
-    #         <div style="font-size:.65rem; margin-top:.3rem; opacity:.6;">
-    #             ⚡ {m['inference_ms']:.1f}ms inference · 🕒 {m['train_time_s']:.1f}s training
-    #         </div>
-    #     </div>
-    #     """, unsafe_allow_html=True)
-    # else:
-    #     # Fallback if metrics not loaded
-    #     st.markdown(f"""
-    #     <div style="font-size:.73rem; line-height:1.85; opacity:.7;">
-    #         <div style="font-weight:700; font-size:.69rem; letter-spacing:.06em;
-    #                     text-transform:uppercase; margin-bottom:.2rem;">Ensemble LASSO</div>
-    #         <div>Models: {len(models['lasso_models'])}</div>
-    #         <div>Threshold: {models['threshold']:.4f}</div>
-    #     </div>
-    #     """, unsafe_allow_html=True)
-
-    # ── SIGN OUT BUTTON ────────────────────────────────────────────────────
     st.markdown("---")
-    st.markdown("###")  # Add some spacing
-
-    # Use a more prominent button with a unique key
+    
+    # Sign out button
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if st.button("🚪 SIGN OUT", key="sidebar_signout", use_container_width=True, type="primary"):
-            # Clear session state
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.rerun()
-
-    # Add a visible marker to confirm the button should be here
-    st.caption("End of menu")  # This will show if the section is rendering
 
 
 # ─────────────────────────────────────────────────────────────────────────────
