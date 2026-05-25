@@ -1,57 +1,55 @@
 # CCUSP Prediction System
 
-> MSc Data Science & Analytics · Strathmore University  
-> Mboya Jackline Achieng — Reg. 193670
+> MSc Data Science & Analytics · Strathmore University
 
----
+## Overview
 
-## Credentials
+The **CCUSP (Critical Care Ultrasound Practitioner) Prediction System** is a machine learning-powered web application that predicts a practitioner's likelihood of achieving CCUSP certification based on their professional background, training, and practice patterns. The system provides real-time predictions with SHAP-based explainability to help practitioners understand key factors influencing their certification potential.
 
-| Role | Username | Password | Notes |
-|------|----------|----------|-------|
-| Practitioner | *(register first)* | *(you choose)* | Stored in SQLite |
+## Features
 
----
+- **User Authentication** — Secure registration and login system
+- **Self-Assessment Tool** — Interactive form for practitioners to evaluate their CCUSP readiness
+- **Real-Time Predictions** — Powered by tuned ensemble Lasso models
+- **Model Explainability** — SHAP value visualizations showing feature importance
+- **Admin Dashboard** — Dynamic analytics with real-time charts from live database
+- **Prediction History** — Tracks and stores all predictions for analysis
 
-## Setup
+## Technology Stack
+
+- **Frontend**: Streamlit
+- **Backend**: Python
+- **Database**: SQLite
+- **Machine Learning**: Scikit-learn, SHAP, XGBoost
+- **Visualization**: Matplotlib, Plotly
+
+## Installation
+
+### Prerequisites
+
+- Python 3.8 or higher
+- Git Bash (Windows) or terminal (Mac/Linux)
+
+### Setup Instructions
 
 ```bash
-# 1. Copy 3 pkl files from Google Drive into models/
-#    tuned_ensemble_lasso_models.pkl
-#    scaler.pkl
-#    tuned_optimal_threshold.pkl
+# 1. Clone the repository
+git clone <repository-url>
+cd ccusp_deployment
 
-# 2. Install and run (Git Bash)
-source .venv/Scripts/activate       # if using venv
+# 2. Create and activate virtual environment
+python -m venv .venv
+source .venv/Scripts/activate        # Windows (Git Bash)
+# OR
+source .venv/bin/activate            # Mac/Linux
+
+# 3. Install dependencies
 pip install -r requirements.txt
+
+# 4. Download model files from Google Drive and place in models/ folder
+#    - tuned_ensemble_lasso_models.pkl
+#    - scaler.pkl
+#    - tuned_optimal_threshold.pkl
+
+# 5. Run the application
 streamlit run app.py
-```
-
----
-
-## How It Works
-
-**Register** → create an account with name, email, specialty, hospital  
-**Sign in** → access your self-assessment form  
-**Run prediction** → live model output 
-**Admin dashboard** → all charts generated dynamically from real DB data  
-
-## File Structure
-
-```
-ccusp_deployment/
-├── app.py                    ← Entry point
-├── requirements.txt
-├── pages/
-│   ├── practitioner.py       ← Self-assessment (real model prediction)
-│   └── admin.py              ← Dynamic analytics dashboard
-├── utils/
-│   ├── database.py           ← SQLite registry + prediction log
-│   ├── model_loader.py       ← Load models + predict_from_ui()
-│   └── shap_explainer.py     ← SHAP chart
-├── models/                   ← Place pkl files here
-└── data/                     ← ccusp_users.db auto-created here
-```
-
-
-Link ccusp-deployment-knkc2rbqhx4qirx4wbvgj5.streamlit.app
