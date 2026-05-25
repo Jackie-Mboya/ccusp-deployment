@@ -52,3 +52,6 @@ ccusp_deployment/
 ├── models/                   ← Place pkl files here
 └── data/                     ← ccusp_users.db auto-created here
 ```
+
+
+Link ccusp-deployment-knkc2rbqhx4qirx4wbvgj5.streamlit.app
